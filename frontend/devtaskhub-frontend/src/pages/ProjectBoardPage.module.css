@@ -1,0 +1,110 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.columns {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.column {
+  background: #fff;
+  border-radius: 14px;
+  padding: 1rem;
+  border: 1px solid #e2e8f0;
+}
+
+.columnTitle {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.taskCard {
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 0.75rem;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 0.75rem;
+}
+
+.taskTitle {
+  margin: 0 0 0.25rem;
+  font-weight: 600;
+}
+
+.taskMeta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.taskControls {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.taskControls select {
+  flex: 1;
+  padding: 0.35rem;
+  border-radius: 8px;
+  border: 1px solid #cbd5f5;
+}
+
+.deleteTask {
+  background: transparent;
+  border: 1px solid #ef4444;
+  color: #ef4444;
+  border-radius: 8px;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+}
+
+.newTaskCard {
+  background: #fff;
+  border-radius: 14px;
+  padding: 1rem;
+  border: 1px solid #e2e8f0;
+}
+
+.newTaskCard form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.newTaskCard textarea,
+.newTaskCard input,
+.newTaskCard select,
+.newTaskCard button {
+  font-family: inherit;
+}
+
+.addTask {
+  background: #2563eb;
+  border: none;
+  color: #fff;
+  padding: 0.65rem 1rem;
+  border-radius: 10px;
+}
+
+.backLink {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.error {
+  color: #dc2626;
+}

@@ -1,0 +1,6 @@
+@DevTaskHub.Api_HostAddress = http://localhost:0
+
+GET {{DevTaskHub.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

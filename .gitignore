@@ -1,0 +1,21 @@
+# macOS
+.DS_Store
+
+# Dotnet
+/backend/**/bin/
+/backend/**/obj/
+/.dotnet/
+/backend/DevTaskHub.Api/devtaskhub.db
+/backend/DevTaskHub.Api/Data/devtaskhub.db
+*.db
+
+# Node
+/frontend/devtaskhub-frontend/node_modules/
+/frontend/devtaskhub-frontend/dist/
+
+# Logs
+*.log
+
+# IDEs
+.vscode/
+.idea/
