@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
 
+// --- 1. Configuración de Servicios Básicos ---
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
@@ -24,27 +25,39 @@ builder.Services.AddCors(options =>
     });
 });
 
+// --- 2. Configuración de Base de Datos (FIX para EF Core Design Time) ---
+
 var connectionString = configuration.GetConnectionString("DefaultConnection") ?? "Data Source=devtaskhub.db";
 
-builder.Services.AddDbContext<DevTaskHubContext>(options =>
+// FIX: Solo se ejecuta AddDbContext si NO estamos en Design Time (cuando dotnet ef lo usa).
+// Si estamos en Design Time, EF Core usará la clase DevTaskHubContextFactory que creamos.
+if (Environment.GetEnvironmentVariable("ASPNETCORE_HOSTINGSTARTUPASSEMBLIES") == null)
 {
-    if (builder.Environment.IsDevelopment())
+    builder.Services.AddDbContext<DevTaskHubContext>(options =>
     {
-        options.UseSqlite(connectionString);
-    }
-    else
-    {
-        options.UseSqlServer(connectionString);
-    }
-});
+        if (builder.Environment.IsDevelopment())
+        {
+            options.UseSqlite(connectionString);
+        }
+        else
+        {
+            // Usará SQL Server en QA y PROD (ya que ASPNETCORE_ENVIRONMENT != Development)
+            options.UseSqlServer(connectionString);
+        }
+    });
+}
 
 var app = builder.Build();
+
+// --- 3. Migración Automática al Iniciar (Usa el contexto registrado) ---
 
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<DevTaskHubContext>();
     dbContext.Database.Migrate();
 }
+
+// --- 4. Configuración del Pipeline HTTP ---
 
 if (app.Environment.IsDevelopment())
 {
