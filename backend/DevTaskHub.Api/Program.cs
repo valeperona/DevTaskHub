@@ -24,8 +24,19 @@ builder.Services.AddCors(options =>
     });
 });
 
+var connectionString = configuration.GetConnectionString("DefaultConnection") ?? "Data Source=devtaskhub.db";
+
 builder.Services.AddDbContext<DevTaskHubContext>(options =>
-    options.UseSqlite(configuration.GetConnectionString("DefaultConnection")));
+{
+    if (builder.Environment.IsDevelopment())
+    {
+        options.UseSqlite(connectionString);
+    }
+    else
+    {
+        options.UseSqlServer(connectionString);
+    }
+});
 
 var app = builder.Build();
 

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
+using System;
 
 namespace DevTaskHub.Api.Data;
 
@@ -15,11 +16,48 @@ public class DevTaskHubContextFactory : IDesignTimeDbContextFactory<DevTaskHubCo
             .AddEnvironmentVariables()
             .Build();
 
-        var connectionString = configuration.GetConnectionString("DefaultConnection") ?? "Data Source=devtaskhub.db";
+        var connectionString = ResolveConnectionString(configuration, args);
 
         var optionsBuilder = new DbContextOptionsBuilder<DevTaskHubContext>();
-        optionsBuilder.UseSqlite(connectionString);
+        if (IsSqlServerConnection(connectionString))
+        {
+            optionsBuilder.UseSqlServer(connectionString);
+        }
+        else
+        {
+            optionsBuilder.UseSqlite(connectionString);
+        }
 
         return new DevTaskHubContext(optionsBuilder.Options);
+    }
+
+    private static string ResolveConnectionString(IConfiguration configuration, string[] args)
+    {
+        var connectionString = configuration.GetConnectionString("DefaultConnection") ?? "Data Source=devtaskhub.db";
+
+        if (args.Length == 0)
+        {
+            return connectionString;
+        }
+
+        var connectionArgIndex = Array.FindIndex(args, arg => arg.Equals("--connection", StringComparison.OrdinalIgnoreCase));
+        if (connectionArgIndex >= 0 && connectionArgIndex + 1 < args.Length)
+        {
+            return args[connectionArgIndex + 1];
+        }
+
+        return connectionString;
+    }
+
+    private static bool IsSqlServerConnection(string connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return false;
+        }
+
+        return connectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase)
+            || connectionString.Contains("Initial Catalog=", StringComparison.OrdinalIgnoreCase)
+            || connectionString.Contains(".database.windows.net", StringComparison.OrdinalIgnoreCase);
     }
 }
