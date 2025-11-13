@@ -59,7 +59,7 @@ using (var scope = app.Services.CreateScope())
 
 // --- 4. Configuración del Pipeline HTTP ---
 
-if (app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("QA"))
 {
     app.UseSwagger();
     app.UseSwaggerUI();
