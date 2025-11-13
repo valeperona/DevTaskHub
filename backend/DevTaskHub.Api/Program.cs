@@ -16,9 +16,20 @@ builder.Services.AddControllers()
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-var allowedOrigins = configuration
-    .GetSection("Cors:AllowedOrigins")
-    .Get<string[]>() ?? new[] { "http://localhost:5173" };
+var allowedOrigins = builder.Environment switch
+{
+    var env when env.IsEnvironment("QA") => new[]
+    {
+        "http://localhost:5173",
+        "https://devtaskhub-frontend-qa-e6gsa4f8eqcwerdw.centralus-01.azurewebsites.net"
+    },
+    var env when env.IsProduction() => new[]
+    {
+        "http://localhost:5173",
+        "https://devtaskhub-frontend-prod-cvbdd2brc6fchbbk.centralus-01.azurewebsites.net"
+    },
+    _ => new[] { "http://localhost:5173" }
+};
 
 builder.Services.AddCors(options =>
 {
