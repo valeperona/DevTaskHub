@@ -1,0 +1,100 @@
+trigger:
+- main
+
+pool:
+  name: Default
+  demands:
+  - Agent.OS -equals Darwin
+
+variables:
+  buildConfiguration: 'Release'
+  dotNetVersion: '8.0.x'
+
+stages:
+- stage: Build
+  displayName: 'Build Backend + Frontend'
+  jobs:
+  - job: BuildJob
+    displayName: 'Build Everything'
+    steps:
+
+    # ===========================
+    # BACKEND (.NET 8)
+    # ===========================
+
+    - task: UseDotNet@2
+      displayName: 'Use .NET SDK 8'
+      inputs:
+        packageType: 'sdk'
+        version: '$(dotNetVersion)'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Restore Backend'
+      inputs:
+        command: 'restore'
+        projects: '**/*.csproj'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Build Backend'
+      inputs:
+        command: 'build'
+        projects: '**/*.csproj'
+        arguments: '--configuration $(buildConfiguration) --no-restore'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Test Backend'
+      inputs:
+        command: 'test'
+        projects: '**/*Tests.csproj'
+        arguments: '--configuration $(buildConfiguration) --no-build'
+      continueOnError: false
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Publish Backend Web API'
+      inputs:
+        command: 'publish'
+        publishWebProjects: true
+        arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/backend --no-build'
+        zipAfterPublish: true
+
+    # ===========================
+    # FRONTEND (React + Vite)
+    # ===========================
+
+    - task: NodeTool@0
+      displayName: 'Install Node.js 18'
+      inputs:
+        versionSpec: '18.x'
+
+    - script: |
+        cd frontend/devtaskhub-frontend
+        npm install
+        npm run build
+      displayName: 'Build Frontend (React + Vite)'
+
+    - task: ArchiveFiles@2
+      displayName: 'Zip Frontend Dist'
+      inputs:
+        rootFolderOrFile: 'frontend/devtaskhub-frontend/dist'
+        includeRootFolder: false
+        archiveType: 'zip'
+        archiveFile: '$(Build.ArtifactStagingDirectory)/frontend.zip'
+        replaceExistingArchive: true
+
+    # ===========================
+    # PUBLICAR ARTEFACTOS
+    # ===========================
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish Backend Artifact'
+      inputs:
+        pathToPublish: '$(Build.ArtifactStagingDirectory)/backend'
+        artifactName: 'drop'
+        publishLocation: 'Container'
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish Frontend Artifact'
+      inputs:
+        pathToPublish: '$(Build.ArtifactStagingDirectory)/frontend.zip'
+        artifactName: 'frontend'
+        publishLocation: 'Container'
