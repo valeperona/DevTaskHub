@@ -53,7 +53,7 @@ stages:
       displayName: 'Publish backend code coverage (Cobertura)'
       inputs:
         codeCoverageTool: 'Cobertura'
-        summaryFileLocation: '$(System.DefaultWorkingDirectory)/**/coverage.cobertura.xml'
+        summaryFileLocation: '$(System.DefaultWorkingDirectory)/backend/DevTaskHub.Tests/TestResults/coverage/coverage.cobertura.xml'
         failIfCoverageEmpty: false
 
     - task: DotNetCoreCLI@2
