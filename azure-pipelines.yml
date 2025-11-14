@@ -28,6 +28,19 @@ stages:
         packageType: 'sdk'
         version: '$(dotNetVersion)'
 
+    - task: SonarCloudPrepare@1
+      displayName: 'Prepare SonarCloud analysis'
+      inputs:
+        SonarCloud: 'sonarcloud-devtaskhub'
+        organization: 'ucc-vale-ingsw3'
+        scannerMode: 'MSBuild'
+        projectKey: 'valeperona_DevTaskHub'
+        projectName: 'DevTaskHub'
+        extraProperties: |
+          sonar.cs.opencover.reportsPaths=$(Agent.TempDirectory)/**/coverage.cobertura.xml
+          sonar.javascript.lcov.reportPaths=frontend/devtaskhub-frontend/coverage/lcov.info
+          sonar.typescript.lcov.reportPaths=frontend/devtaskhub-frontend/coverage/lcov.info
+
     - task: DotNetCoreCLI@2
       displayName: 'Restore Backend'
       inputs:
@@ -106,6 +119,9 @@ stages:
       env:
         VITE_API_BASE_URL: "https://devtaskhub-backend-prod-cvbdd2brc6fchbbk.centralus-01.azurewebsites.net"
 
+    - task: SonarCloudAnalyze@1
+      displayName: 'Run SonarCloud code analysis'
+
     - task: ArchiveFiles@2
       displayName: 'Zip Frontend QA'
       inputs:
@@ -141,3 +157,8 @@ stages:
         pathToPublish: '$(Build.ArtifactStagingDirectory)/frontend'
         artifactName: 'frontend'
         publishLocation: 'Container'
+
+    - task: SonarCloudPublish@1
+      displayName: 'Publish SonarCloud Quality Gate Result'
+      inputs:
+        pollingTimeoutSec: '300'
