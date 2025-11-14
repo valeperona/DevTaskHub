@@ -31,7 +31,7 @@ stages:
     - task: SonarCloudPrepare@1
       displayName: 'Prepare SonarCloud analysis'
       inputs:
-        SonarCloud: 'sonarcloud-devtaskhub'
+        SonarCloud: 'devtaskhub-sonarcloud'
         organization: 'ucc-vale-ingsw3'
         scannerMode: 'MSBuild'
         projectKey: 'valeperona_DevTaskHub'
