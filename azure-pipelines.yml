@@ -75,6 +75,7 @@ stages:
     - script: |
         set -e
         cd frontend/devtaskhub-frontend
+        rm -rf dist
         npm run build
         rm -rf $(Build.ArtifactStagingDirectory)/frontend/dist-qa
         mkdir -p $(Build.ArtifactStagingDirectory)/frontend/dist-qa
@@ -86,6 +87,7 @@ stages:
     - script: |
         set -e
         cd frontend/devtaskhub-frontend
+        rm -rf dist
         npm run build
         rm -rf $(Build.ArtifactStagingDirectory)/frontend/dist-prod
         mkdir -p $(Build.ArtifactStagingDirectory)/frontend/dist-prod
