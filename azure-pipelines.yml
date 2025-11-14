@@ -42,12 +42,28 @@ stages:
         arguments: '--configuration $(buildConfiguration) --no-restore'
 
     - task: DotNetCoreCLI@2
-      displayName: 'Test Backend'
+      displayName: 'Test Backend with Coverage'
       inputs:
-        command: 'test'
-        projects: '**/*Tests.csproj'
-        arguments: '--configuration $(buildConfiguration) --no-build'
+        command: 'custom'
+        custom: 'test'
+        arguments: 'backend/DevTaskHub.sln /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:CoverletOutput=$(Agent.TempDirectory)/coverage.cobertura.xml --configuration $(buildConfiguration) --no-build --logger trx --results-directory $(Agent.TempDirectory)/TestResults'
       continueOnError: false
+
+    - task: PublishCodeCoverageResults@2
+      displayName: 'Publish Backend Coverage (Cobertura)'
+      inputs:
+        codeCoverageTool: 'Cobertura'
+        summaryFileLocation: '$(Agent.TempDirectory)/coverage.cobertura.xml'
+        reportDirectory: '$(Agent.TempDirectory)'
+
+    - task: PublishTestResults@2
+      displayName: 'Publish Backend Test Results'
+      inputs:
+        testResultsFormat: 'VSTest'
+        testResultsFiles: '**/TestResults/*.trx'
+        searchFolder: '$(Agent.TempDirectory)/TestResults'
+        mergeTestResults: true
+        testRunTitle: 'Backend Tests'
 
     - task: DotNetCoreCLI@2
       displayName: 'Publish Backend Web API'
