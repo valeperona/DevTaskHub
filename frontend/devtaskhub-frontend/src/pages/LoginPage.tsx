@@ -32,9 +32,12 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           placeholder="nombre@ejemplo.com"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
+          data-cy="login-email-input"
         />
         {error && <span className={styles.error}>{error}</span>}
-        <button type="submit">Ingresar</button>
+        <button type="submit" data-cy="login-submit-button">
+          Ingresar
+        </button>
       </form>
     </div>
   );

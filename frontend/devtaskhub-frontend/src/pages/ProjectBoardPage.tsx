@@ -103,42 +103,49 @@ export function ProjectBoardPage() {
         </div>
       </div>
 
-      <div className={styles.newTaskCard}>
-        <form onSubmit={handleCreateTask}>
+      <div className={styles.newTaskCard} data-cy="new-task-card">
+        <form onSubmit={handleCreateTask} data-cy="new-task-form">
           <input
             type="text"
             placeholder="Título de la tarea"
             value={newTask.title}
             onChange={(event) => setNewTask((prev) => ({ ...prev, title: event.target.value }))}
+            data-cy="task-title-input"
           />
           <textarea
             placeholder="Descripción"
             value={newTask.description}
             onChange={(event) => setNewTask((prev) => ({ ...prev, description: event.target.value }))}
+            data-cy="task-desc-input"
           />
           <select
             value={newTask.priority}
             onChange={(event) => setNewTask((prev) => ({ ...prev, priority: event.target.value as TaskPriority }))}
+            data-cy="task-priority-select"
           >
             <option value="Low">Baja</option>
             <option value="Medium">Media</option>
             <option value="High">Alta</option>
           </select>
-          <button type="submit" className={styles.addTask}>
+          <button type="submit" className={styles.addTask} data-cy="task-save-button">
             Agregar tarea
           </button>
         </form>
       </div>
 
-      {error && <p className={styles.error}>{error}</p>}
+      {error && (
+        <p className={styles.error} data-cy="error-message">
+          {error}
+        </p>
+      )}
 
       <div className={styles.columns}>
         {groupedTasks.map((column) => (
-          <div key={column.status} className={styles.column}>
+          <div key={column.status} className={styles.column} data-cy={`column-${column.status}`}>
             <h3 className={styles.columnTitle}>{column.status}</h3>
             {column.items.length === 0 && <p className={styles.taskMeta}>Sin tareas</p>}
             {column.items.map((task) => (
-              <div key={task.id} className={styles.taskCard}>
+              <div key={task.id} className={styles.taskCard} data-cy="task-card">
                 <h4 className={styles.taskTitle}>{task.title}</h4>
                 <p>{task.description || 'Sin descripción'}</p>
                 <div className={styles.taskMeta}>
@@ -146,19 +153,32 @@ export function ProjectBoardPage() {
                   <span>{new Date(task.createdAt).toLocaleDateString()}</span>
                 </div>
                 <div className={styles.taskControls}>
-                  <select value={task.status} onChange={(event) => handleTaskUpdate(task.id, event.target.value as TaskStatus, task.priority)}>
+                  <select
+                    value={task.status}
+                    onChange={(event) => handleTaskUpdate(task.id, event.target.value as TaskStatus, task.priority)}
+                    data-cy="task-status-select"
+                  >
                     {statusColumns.map((status) => (
                       <option value={status} key={status}>
                         {status}
                       </option>
                     ))}
                   </select>
-                  <select value={task.priority} onChange={(event) => handleTaskUpdate(task.id, task.status, event.target.value as TaskPriority)}>
+                  <select
+                    value={task.priority}
+                    onChange={(event) => handleTaskUpdate(task.id, task.status, event.target.value as TaskPriority)}
+                    data-cy="task-priority-select-existing"
+                  >
                     <option value="Low">Baja</option>
                     <option value="Medium">Media</option>
                     <option value="High">Alta</option>
                   </select>
-                  <button type="button" className={styles.deleteTask} onClick={() => handleDeleteTask(task.id)}>
+                  <button
+                    type="button"
+                    className={styles.deleteTask}
+                    onClick={() => handleDeleteTask(task.id)}
+                    data-cy="delete-task-button"
+                  >
                     Eliminar
                   </button>
                 </div>
