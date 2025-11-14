@@ -71,6 +71,8 @@ stages:
         npm install
         npm run build
       displayName: 'Build Frontend (React + Vite)'
+      env:
+        VITE_API_BASE_URL: "https://devtaskhub-backend-qa-hmfzd9aqh3dcc7b5.centralus-01.azurewebsites.net"
 
     - task: ArchiveFiles@2
       displayName: 'Zip Frontend Dist'
