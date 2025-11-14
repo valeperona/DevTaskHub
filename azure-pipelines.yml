@@ -67,20 +67,49 @@ stages:
         versionSpec: '18.x'
 
     - script: |
+        set -e
         cd frontend/devtaskhub-frontend
         npm install
+      displayName: 'Install Frontend Dependencies'
+
+    - script: |
+        set -e
+        cd frontend/devtaskhub-frontend
         npm run build
-      displayName: 'Build Frontend (React + Vite)'
+        rm -rf $(Build.ArtifactStagingDirectory)/frontend/dist-qa
+        mkdir -p $(Build.ArtifactStagingDirectory)/frontend/dist-qa
+        cp -R dist/. $(Build.ArtifactStagingDirectory)/frontend/dist-qa
+      displayName: 'Build Frontend (QA)'
       env:
         VITE_API_BASE_URL: "https://devtaskhub-backend-qa-hmfzd9aqh3dcc7b5.centralus-01.azurewebsites.net"
 
+    - script: |
+        set -e
+        cd frontend/devtaskhub-frontend
+        npm run build
+        rm -rf $(Build.ArtifactStagingDirectory)/frontend/dist-prod
+        mkdir -p $(Build.ArtifactStagingDirectory)/frontend/dist-prod
+        cp -R dist/. $(Build.ArtifactStagingDirectory)/frontend/dist-prod
+      displayName: 'Build Frontend (Prod)'
+      env:
+        VITE_API_BASE_URL: "https://devtaskhub-backend-prod-cvbdd2brc6fchbbk.centralus-01.azurewebsites.net"
+
     - task: ArchiveFiles@2
-      displayName: 'Zip Frontend Dist'
+      displayName: 'Zip Frontend QA'
       inputs:
-        rootFolderOrFile: '$(Build.SourcesDirectory)/frontend/devtaskhub-frontend/dist'
-        includeRootFolder: false          # <- importante: no incluir carpeta dist
+        rootFolderOrFile: '$(Build.ArtifactStagingDirectory)/frontend/dist-qa'
+        includeRootFolder: false
         archiveType: 'zip'
-        archiveFile: '$(Build.ArtifactStagingDirectory)/frontend/frontend_zip.zip'
+        archiveFile: '$(Build.ArtifactStagingDirectory)/frontend/frontend-qa.zip'
+        replaceExistingArchive: true
+
+    - task: ArchiveFiles@2
+      displayName: 'Zip Frontend Prod'
+      inputs:
+        rootFolderOrFile: '$(Build.ArtifactStagingDirectory)/frontend/dist-prod'
+        includeRootFolder: false
+        archiveType: 'zip'
+        archiveFile: '$(Build.ArtifactStagingDirectory)/frontend/frontend-prod.zip'
         replaceExistingArchive: true
 
     # ===========================
