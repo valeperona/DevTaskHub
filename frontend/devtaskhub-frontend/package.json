@@ -12,8 +12,7 @@
     "test:watch": "vitest --watch",
     "test:run": "vitest run",
     "cy:open": "cypress open",
-    "cy:run": "cypress run"
-
+    "cy:run": "cypress run --browser chrome --headless"
   },
   "dependencies": {
     "react": "^19.2.0",
@@ -21,6 +20,7 @@
     "react-router-dom": "^7.9.5"
   },
   "devDependencies": {
+    "@cypress/vite-dev-server": "^7.0.0",
     "@eslint/js": "^9.39.1",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
