@@ -41,34 +41,20 @@ stages:
         projects: '**/*.csproj'
         arguments: '--configuration $(buildConfiguration) --no-restore'
 
-    - script: |
-        mkdir -p "$(Agent.TempDirectory)/coverage"
-        mkdir -p "$(Agent.TempDirectory)/TestResults"
-      displayName: 'Prepare coverage folders'
-
     - task: DotNetCoreCLI@2
-      displayName: 'Test Backend with Coverage'
+      displayName: 'Run backend tests with coverage'
       inputs:
-        command: 'custom'
-        custom: 'test'
-        arguments: 'backend/DevTaskHub.sln /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:CoverletOutput=$(Agent.TempDirectory)/coverage/ --configuration $(buildConfiguration) --no-build --logger trx --results-directory $(Agent.TempDirectory)/TestResults'
-      continueOnError: false
+        command: 'test'
+        projects: 'backend/DevTaskHub.sln'
+        arguments: '--collect:"XPlat Code Coverage"'
+        publishTestResults: true
 
     - task: PublishCodeCoverageResults@2
-      displayName: 'Publish Backend Coverage (Cobertura)'
+      displayName: 'Publish backend code coverage (Cobertura)'
       inputs:
         codeCoverageTool: 'Cobertura'
-        summaryFileLocation: '$(Agent.TempDirectory)/coverage/coverage.cobertura.xml'
-        reportDirectory: '$(Agent.TempDirectory)/coverage'
-
-    - task: PublishTestResults@2
-      displayName: 'Publish Backend Test Results'
-      inputs:
-        testResultsFormat: 'VSTest'
-        testResultsFiles: '**/*.trx'
-        searchFolder: '$(Agent.TempDirectory)/TestResults'
-        mergeTestResults: true
-        testRunTitle: 'Backend Tests'
+        summaryFileLocation: '$(System.DefaultWorkingDirectory)/**/coverage.cobertura.xml'
+        failIfCoverageEmpty: false
 
     - task: DotNetCoreCLI@2
       displayName: 'Publish Backend Web API'
