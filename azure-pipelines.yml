@@ -49,13 +49,6 @@ stages:
         arguments: '--collect:"XPlat Code Coverage"'
         publishTestResults: true
 
-    - task: PublishCodeCoverageResults@2
-      displayName: 'Publish backend code coverage (Cobertura)'
-      inputs:
-        codeCoverageTool: 'Cobertura'
-        summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
-        failIfCoverageEmpty: false
-
     - task: DotNetCoreCLI@2
       displayName: 'Publish Backend Web API'
       inputs:
@@ -80,10 +73,13 @@ stages:
       workingDirectory: 'frontend/devtaskhub-frontend'
 
     - task: PublishCodeCoverageResults@2
-      displayName: 'Publish frontend code coverage (lcov)'
+      displayName: 'Publish backend and frontend coverage'
       inputs:
         codeCoverageTool: 'Cobertura'
-        summaryFileLocation: 'frontend/devtaskhub-frontend/coverage/lcov.info'
+        summaryFileLocation: |
+          $(Agent.TempDirectory)/**/coverage.cobertura.xml
+          frontend/devtaskhub-frontend/coverage/lcov.info
+        reportDirectory: '$(System.DefaultWorkingDirectory)/coverage-report'
         failIfCoverageEmpty: false
 
     - script: |
