@@ -28,6 +28,16 @@ stages:
         packageType: 'sdk'
         version: '$(dotNetVersion)'
 
+    - script: |
+        set -e
+        JDK_DIR="$(Agent.TempDirectory)/temurin-jdk"
+        mkdir -p "$JDK_DIR"
+        curl -L "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.13+11/OpenJDK17U-jdk_x64_mac_hotspot_17.0.13_11.tar.gz" -o "$JDK_DIR/jdk.tar.gz"
+        tar -xzf "$JDK_DIR/jdk.tar.gz" -C "$JDK_DIR" --strip-components=1
+        echo "##vso[task.setvariable variable=JAVA_HOME]$JDK_DIR"
+        echo "##vso[task.prependpath]$JDK_DIR/bin"
+      displayName: 'Install Temurin JDK 17'
+
     - task: SonarCloudPrepare@1
       displayName: 'Prepare SonarCloud analysis'
       inputs:
