@@ -8,7 +8,12 @@ export default mergeConfig(
       globals: true,
       environment: 'jsdom',
       setupFiles: './src/setupTests.ts',
-      css: true
+      css: true,
+      coverage: {
+        provider: 'v8',
+        reportsDirectory: './coverage',
+        reporter: ['text', 'lcov']
+      }
     }
   })
 );

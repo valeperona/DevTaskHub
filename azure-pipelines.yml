@@ -75,7 +75,7 @@ stages:
 
     - script: |
         npm ci
-        npm test -- --coverage
+        npm run test:run -- --coverage
       displayName: 'Run frontend tests with coverage'
       workingDirectory: 'frontend/devtaskhub-frontend'
 
