@@ -71,6 +71,13 @@ stages:
         cd frontend/devtaskhub-frontend
         npm install
       displayName: 'Install Frontend Dependencies'
+    - script: |
+        set -e
+        cd frontend/devtaskhub-frontend
+        npm run test:run
+      displayName: 'Run Frontend Tests'
+      env:
+        CI: 'true'
 
     - script: |
         set -e

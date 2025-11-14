@@ -1,10 +1,8 @@
 using System.Net;
-using DevTaskHub.Api;
-using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace DevTaskHub.Tests;
 
-public class HealthEndpointTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
+public class HealthEndpointTests(CustomWebApplicationFactory factory) : IClassFixture<CustomWebApplicationFactory>
 {
     private readonly HttpClient _client = factory.CreateClient();
 
