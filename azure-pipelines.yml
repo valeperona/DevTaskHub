@@ -1,196 +1,284 @@
 trigger:
-  - main
+- main
+
+# Usamos tu agente self-hosted macOS
+pool:
+  name: Default
+  demands:
+  - Agent.OS -equals Darwin
 
 variables:
   buildConfiguration: 'Release'
   dotNetVersion: '8.0.x'
-  azureSubscription: '$(azureSubscription)' # definir en variables del pipeline
-  backendWebAppQa: '$(backendWebAppQa)'     # definir en variables del pipeline
-  backendWebAppProd: '$(backendWebAppProd)' # definir en variables del pipeline
-  frontendWebAppQa: '$(frontendWebAppQa)'   # definir en variables del pipeline
-  frontendWebAppProd: '$(frontendWebAppProd)' # definir en variables del pipeline
 
-pool:
-  vmImage: 'windows-latest'
+  # Service connection a Azure (nombre EXACTO tal como aparece en Service connections)
+  azureSubscription: 'Azure for Students (96ea79e3-91ea-4b7a-b006-c1b7bbcf77a)'
 
+  # Nombres de tus Web Apps
+  backendWebAppQa: 'devtaskhub-backend-qa'
+  backendWebAppProd: 'devtaskhub-backend-prod'
+  frontendWebAppQa: 'devtaskhub-frontend-qa'
+  frontendWebAppProd: 'devtaskhub-frontend-prod'
+
+# ===========================
+# STAGE 1: BUILD
+# ===========================
 stages:
-  - stage: Build
-    displayName: 'Build Backend + Frontend'
-    jobs:
-      - job: BuildJob
-        displayName: 'Build and Pack'
-        steps:
-          - task: UseDotNet@2
-            displayName: 'Use .NET SDK 8'
+- stage: Build
+  displayName: 'Build Backend + Frontend'
+  jobs:
+  - job: BuildJob
+    displayName: 'Build and Pack'
+    steps:
+    - task: UseDotNet@2
+      displayName: 'Use .NET SDK 8'
+      inputs:
+        packageType: 'sdk'
+        version: '$(dotNetVersion)'
+
+    - task: NodeTool@0
+      displayName: 'Install Node.js 18'
+      inputs:
+        versionSpec: '18.18.2'
+
+    # BACKEND
+    - task: DotNetCoreCLI@2
+      displayName: 'Restore Backend'
+      inputs:
+        command: 'restore'
+        projects: 'backend/**/*.csproj'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Build Backend'
+      inputs:
+        command: 'build'
+        projects: 'backend/**/*.csproj'
+        arguments: '--configuration $(buildConfiguration) --no-restore'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Publish Backend Web API'
+      inputs:
+        command: 'publish'
+        publishWebProjects: true
+        arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/backend --no-build'
+        zipAfterPublish: true
+
+    # FRONTEND - BUILD QA
+    - script: |
+        set -e
+        cd frontend/devtaskhub-frontend
+        npm ci
+        npm run build
+      displayName: 'Build Frontend for QA'
+      env:
+        VITE_API_BASE_URL: "https://$(backendWebAppQa).azurewebsites.net"
+
+    - script: |
+        set -e
+        mkdir -p $(Build.ArtifactStagingDirectory)/frontend/dist-qa
+        cp -R frontend/devtaskhub-frontend/dist/. $(Build.ArtifactStagingDirectory)/frontend/dist-qa
+      displayName: 'Stage Frontend QA build'
+
+    # FRONTEND - BUILD PROD
+    - script: |
+        set -e
+        cd frontend/devtaskhub-frontend
+        rm -rf dist
+        npm run build
+        mkdir -p $(Build.ArtifactStagingDirectory)/frontend/dist-prod
+        cp -R dist/. $(Build.ArtifactStagingDirectory)/frontend/dist-prod
+      displayName: 'Stage Frontend Prod build'
+      env:
+        VITE_API_BASE_URL: "https://$(backendWebAppProd).azurewebsites.net"
+
+    # ARCHIVE FRONTEND
+    - task: ArchiveFiles@2
+      displayName: 'Zip Frontend QA'
+      inputs:
+        rootFolderOrFile: '$(Build.ArtifactStagingDirectory)/frontend/dist-qa'
+        includeRootFolder: false
+        archiveType: 'zip'
+        archiveFile: '$(Build.ArtifactStagingDirectory)/frontend/frontend-qa.zip'
+        replaceExistingArchive: true
+
+    - task: ArchiveFiles@2
+      displayName: 'Zip Frontend Prod'
+      inputs:
+        rootFolderOrFile: '$(Build.ArtifactStagingDirectory)/frontend/dist-prod'
+        includeRootFolder: false
+        archiveType: 'zip'
+        archiveFile: '$(Build.ArtifactStagingDirectory)/frontend/frontend-prod.zip'
+        replaceExistingArchive: true
+
+    # PUBLICAR ARTEFACTOS
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish backend artifact'
+      inputs:
+        pathToPublish: '$(Build.ArtifactStagingDirectory)/backend'
+        artifactName: 'backend'
+        publishLocation: 'Container'
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish frontend artifacts'
+      inputs:
+        pathToPublish: '$(Build.ArtifactStagingDirectory)/frontend'
+        artifactName: 'frontend'
+        publishLocation: 'Container'
+
+# ===========================
+# STAGE 2: DEPLOY QA
+# ===========================
+- stage: Deploy_QA
+  displayName: 'Deploy to QA'
+  dependsOn: Build
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+  jobs:
+
+  # BACKEND QA
+  - deployment: DeployBackendQA
+    displayName: 'Deploy Backend QA'
+    environment: 'QA'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: backend
+
+          - task: AzureWebApp@1
+            displayName: 'Deploy API to QA'
             inputs:
-              packageType: 'sdk'
-              version: '$(dotNetVersion)'
+              azureSubscription: '$(azureSubscription)'
+              appType: 'webApp'
+              appName: '$(backendWebAppQa)'
+              package: '$(Pipeline.Workspace)/backend/**/*.zip'
+              deploymentMethod: 'auto'
 
-          - task: NodeTool@0
-            displayName: 'Install Node.js 18'
+          # HEALTH CHECK QA (corregido → /api/health)
+          - task: Bash@3
+            displayName: 'Health check Backend QA'
             inputs:
-              versionSpec: '18.18.2'
+              targetType: 'inline'
+              script: |
+                url="https://$(backendWebAppQa).azurewebsites.net/api/health"
+                echo "Checking $url"
+                status=$(curl -s -o /dev/null -w "%{http_code}" "$url")
+                if [ "$status" -ne 200 ]; then
+                  echo "❌ Health check failed with status $status"
+                  exit 1
+                fi
+                echo "✅ Backend QA healthy"
 
-          - task: DotNetCoreCLI@2
-            displayName: 'Restore Backend'
+  # FRONTEND QA
+  - deployment: DeployFrontendQA
+    displayName: 'Deploy Frontend QA'
+    environment: 'QA'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: frontend
+
+          - task: AzureWebApp@1
+            displayName: 'Deploy Frontend to QA'
             inputs:
-              command: 'restore'
-              projects: 'backend/**/*.csproj'
+              azureSubscription: '$(azureSubscription)'
+              appType: 'webApp'
+              appName: '$(frontendWebAppQa)'
+              package: '$(Pipeline.Workspace)/frontend/frontend-qa.zip'
+              deploymentMethod: 'auto'
 
-          - task: DotNetCoreCLI@2
-            displayName: 'Build Backend'
+          # HEALTH CHECK FRONTEND QA
+          - task: Bash@3
+            displayName: 'Health check Frontend QA'
             inputs:
-              command: 'build'
-              projects: 'backend/**/*.csproj'
-              arguments: '--configuration $(buildConfiguration) --no-restore'
+              targetType: 'inline'
+              script: |
+                url="https://$(frontendWebAppQa).azurewebsites.net/"
+                echo "Checking $url"
+                status=$(curl -s -o /dev/null -w "%{http_code}" "$url")
+                if [ "$status" -lt 200 ] || [ "$status" -ge 400 ]; then
+                  echo "❌ Frontend QA health check failed (HTTP $status)"
+                  exit 1
+                fi
+                echo "✅ Frontend QA healthy"
 
-          - task: DotNetCoreCLI@2
-            displayName: 'Publish Backend Web API'
+# ===========================
+# STAGE 3: DEPLOY PROD (con aprobaciones)
+# ===========================
+- stage: Deploy_PROD
+  displayName: 'Deploy to PROD'
+  dependsOn: Deploy_QA
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+  jobs:
+
+  # BACKEND PROD
+  - deployment: DeployBackendPROD
+    displayName: 'Deploy Backend PROD'
+    environment: 'PROD'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: backend
+
+          - task: AzureWebApp@1
+            displayName: 'Deploy API to PROD'
             inputs:
-              command: 'publish'
-              publishWebProjects: true
-              arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/backend --no-build'
-              zipAfterPublish: true
+              azureSubscription: '$(azureSubscription)'
+              appType: 'webApp'
+              appName: '$(backendWebAppProd)'
+              package: '$(Pipeline.Workspace)/backend/**/*.zip'
+              deploymentMethod: 'auto'
 
-          - script: |
-              set -e
-              cd frontend/devtaskhub-frontend
-              npm ci
-              npm run build
-            displayName: 'Build Frontend'
-
-          - script: |
-              set -e
-              cd frontend/devtaskhub-frontend
-              rm -rf $(Build.ArtifactStagingDirectory)/frontend/dist-qa
-              mkdir -p $(Build.ArtifactStagingDirectory)/frontend/dist-qa
-              cp -R dist/. $(Build.ArtifactStagingDirectory)/frontend/dist-qa
-            displayName: 'Stage Frontend QA build'
-            env:
-              VITE_API_BASE_URL: "https://$(backendWebAppQa).azurewebsites.net"
-
-          - script: |
-              set -e
-              cd frontend/devtaskhub-frontend
-              rm -rf dist
-              npm run build
-              rm -rf $(Build.ArtifactStagingDirectory)/frontend/dist-prod
-              mkdir -p $(Build.ArtifactStagingDirectory)/frontend/dist-prod
-              cp -R dist/. $(Build.ArtifactStagingDirectory)/frontend/dist-prod
-            displayName: 'Stage Frontend Prod build'
-            env:
-              VITE_API_BASE_URL: "https://$(backendWebAppProd).azurewebsites.net"
-
-          - task: ArchiveFiles@2
-            displayName: 'Zip Frontend QA'
+          # HEALTH CHECK PROD (corregido → /api/health)
+          - task: Bash@3
+            displayName: 'Health check Backend PROD'
             inputs:
-              rootFolderOrFile: '$(Build.ArtifactStagingDirectory)/frontend/dist-qa'
-              includeRootFolder: false
-              archiveType: 'zip'
-              archiveFile: '$(Build.ArtifactStagingDirectory)/frontend/frontend-qa.zip'
-              replaceExistingArchive: true
+              targetType: 'inline'
+              script: |
+                url="https://$(backendWebAppProd).azurewebsites.net/api/health"
+                echo "Checking $url"
+                status=$(curl -s -o /dev/null -w "%{http_code}" "$url")
+                if [ "$status" -ne 200 ]; then
+                  echo "❌ Health check PROD failed (HTTP $status)"
+                  exit 1
+                fi
+                echo "✅ Backend PROD healthy"
 
-          - task: ArchiveFiles@2
-            displayName: 'Zip Frontend Prod'
+  # FRONTEND PROD
+  - deployment: DeployFrontendPROD
+    displayName: 'Deploy Frontend PROD'
+    environment: 'PROD'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: frontend
+
+          - task: AzureWebApp@1
+            displayName: 'Deploy Frontend to PROD'
             inputs:
-              rootFolderOrFile: '$(Build.ArtifactStagingDirectory)/frontend/dist-prod'
-              includeRootFolder: false
-              archiveType: 'zip'
-              archiveFile: '$(Build.ArtifactStagingDirectory)/frontend/frontend-prod.zip'
-              replaceExistingArchive: true
+              azureSubscription: '$(azureSubscription)'
+              appType: 'webApp'
+              appName: '$(frontendWebAppProd)'
+              package: '$(Pipeline.Workspace)/frontend/frontend-prod.zip'
+              deploymentMethod: 'auto'
 
-          - task: PublishBuildArtifacts@1
-            displayName: 'Publish backend artifact'
+          # HEALTH CHECK FRONTEND PROD
+          - task: Bash@3
+            displayName: 'Health check Frontend PROD'
             inputs:
-              pathToPublish: '$(Build.ArtifactStagingDirectory)/backend'
-              artifactName: 'backend'
-              publishLocation: 'Container'
-
-          - task: PublishBuildArtifacts@1
-            displayName: 'Publish frontend artifacts'
-            inputs:
-              pathToPublish: '$(Build.ArtifactStagingDirectory)/frontend'
-              artifactName: 'frontend'
-              publishLocation: 'Container'
-
-  - stage: Deploy_QA
-    displayName: 'Deploy to QA'
-    dependsOn: Build
-    condition: succeeded()
-    jobs:
-      - deployment: DeployBackendQA
-        displayName: 'Deploy Backend QA'
-        environment: 'QA'
-        strategy:
-          runOnce:
-            deploy:
-              steps:
-                - download: current
-                  artifact: backend
-                - task: AzureWebApp@1
-                  displayName: 'Deploy API to QA'
-                  inputs:
-                    azureSubscription: '$(azureSubscription)'
-                    appType: 'webApp'
-                    appName: '$(backendWebAppQa)'
-                    package: '$(Pipeline.Workspace)/backend/**/*.zip'
-                    deploymentMethod: 'auto'
-
-      - deployment: DeployFrontendQA
-        displayName: 'Deploy Frontend QA'
-        environment: 'QA'
-        strategy:
-          runOnce:
-            deploy:
-              steps:
-                - download: current
-                  artifact: frontend
-                - task: AzureWebApp@1
-                  displayName: 'Deploy Frontend to QA'
-                  inputs:
-                    azureSubscription: '$(azureSubscription)'
-                    appType: 'webApp'
-                    appName: '$(frontendWebAppQa)'
-                    package: '$(Pipeline.Workspace)/frontend/frontend-qa.zip'
-                    deploymentMethod: 'auto'
-
-  - stage: Deploy_PROD
-    displayName: 'Deploy to PROD'
-    dependsOn: Deploy_QA
-    condition: succeeded()
-    jobs:
-      - deployment: DeployBackendPROD
-        displayName: 'Deploy Backend PROD'
-        environment: 'PROD'
-        strategy:
-          runOnce:
-            deploy:
-              steps:
-                - download: current
-                  artifact: backend
-                - task: AzureWebApp@1
-                  displayName: 'Deploy API to PROD'
-                  inputs:
-                    azureSubscription: '$(azureSubscription)'
-                    appType: 'webApp'
-                    appName: '$(backendWebAppProd)'
-                    package: '$(Pipeline.Workspace)/backend/**/*.zip'
-                    deploymentMethod: 'auto'
-
-      - deployment: DeployFrontendPROD
-        displayName: 'Deploy Frontend PROD'
-        environment: 'PROD'
-        strategy:
-          runOnce:
-            deploy:
-              steps:
-                - download: current
-                  artifact: frontend
-                - task: AzureWebApp@1
-                  displayName: 'Deploy Frontend to PROD'
-                  inputs:
-                    azureSubscription: '$(azureSubscription)'
-                    appType: 'webApp'
-                    appName: '$(frontendWebAppProd)'
-                    package: '$(Pipeline.Workspace)/frontend/frontend-prod.zip'
-                    deploymentMethod: 'auto'
+              targetType: 'inline'
+              script: |
+                url="https://$(frontendWebAppProd).azurewebsites.net/"
+                echo "Checking $url"
+                status=$(curl -s -o /dev/null -w "%{http_code}" "$url")
+                if [ "$status" -lt 200 ] || [ "$status" -ge 400 ]; then
+                  echo "❌ Frontend PROD health check failed (HTTP $status)"
+                  exit 1
+                fi
+                echo "✅ Frontend PROD healthy"
