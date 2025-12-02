@@ -2,20 +2,26 @@ import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../api/apiClient';
-import type { Project } from '../api/apiClient';
+import type { Project, AuthResponse } from '../api/apiClient';
 import styles from './ProjectsPage.module.css';
 
 interface ProjectsPageProps {
-  userEmail: string;
+  session: AuthResponse;
 }
 
-export function ProjectsPage({ userEmail }: ProjectsPageProps) {
+export function ProjectsPage({ session }: ProjectsPageProps) {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [formValues, setFormValues] = useState({ name: '', description: '' });
+
+  const getUserRole = (project: Project) => {
+    if (project.ownerId === session.userId) return 'Owner' as const;
+    const membership = project.members?.find((m) => m.userId === session.userId);
+    return membership?.role ?? 'Viewer';
+  };
 
   const loadProjects = async () => {
     setLoading(true);
@@ -65,12 +71,22 @@ export function ProjectsPage({ userEmail }: ProjectsPageProps) {
     }
   };
 
+  const handleLeaveProject = async (projectId: string) => {
+    if (!confirm('¿Desvincularte de este proyecto? Las tareas asignadas pasarán al Owner.')) return;
+    try {
+      await apiClient.leaveProject(projectId);
+      setProjects((prev) => prev.filter((project) => project.id !== projectId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo desvincular del proyecto');
+    }
+  };
+
   return (
     <div className={styles.wrapper}>
       <div className={styles.headerRow}>
         <div>
           <h2>Proyectos</h2>
-          <p className={styles.projectMeta}>Sesión iniciada como {userEmail}</p>
+          <p className={styles.projectMeta}>Sesión iniciada como {session.email}</p>
         </div>
         <button className={styles.newProjectButton} onClick={() => setShowForm((prev) => !prev)}>
           {showForm ? 'Cancelar' : 'Nuevo proyecto'}
@@ -108,24 +124,40 @@ export function ProjectsPage({ userEmail }: ProjectsPageProps) {
         <div className={styles.emptyState}>No hay proyectos todavía.</div>
       ) : (
         <div className={styles.projectList}>
-          {projects.map((project) => (
-            <div key={project.id} className={styles.projectCard} onClick={() => navigate(`/projects/${project.id}`)}>
-              <h3>{project.name}</h3>
-              <p className={styles.projectMeta}>{project.description || 'Sin descripción'}</p>
-              <p className={styles.projectMeta}>
-                {new Date(project.createdAt).toLocaleDateString()} • {project.tasks?.length ?? 0} tareas
-              </p>
-              <button
-                className={styles.deleteButton}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  handleDeleteProject(project.id);
-                }}
-              >
-                Eliminar
-              </button>
-            </div>
-          ))}
+          {projects.map((project) => {
+            const role = getUserRole(project);
+            const isOwner = role === 'Owner';
+            return (
+              <div key={project.id} className={styles.projectCard} onClick={() => navigate(`/projects/${project.id}`)}>
+                <h3>{project.name}</h3>
+                <p className={styles.projectMeta}>{project.description || 'Sin descripción'}</p>
+                <p className={styles.projectMeta}>
+                  {new Date(project.createdAt).toLocaleDateString()} • {project.tasks?.length ?? 0} tareas
+                </p>
+                {isOwner ? (
+                  <button
+                    className={styles.deleteButton}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleDeleteProject(project.id);
+                    }}
+                  >
+                    Eliminar
+                  </button>
+                ) : (
+                  <button
+                    className={styles.deleteButton}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleLeaveProject(project.id);
+                    }}
+                  >
+                    Desvincularse
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

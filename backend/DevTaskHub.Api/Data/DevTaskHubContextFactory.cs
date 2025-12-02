@@ -19,9 +19,9 @@ public class DevTaskHubContextFactory : IDesignTimeDbContextFactory<DevTaskHubCo
         var connectionString = ResolveConnectionString(configuration, args);
 
         var optionsBuilder = new DbContextOptionsBuilder<DevTaskHubContext>();
-        if (IsSqlServerConnection(connectionString))
+        if (IsPostgresConnection(connectionString))
         {
-            optionsBuilder.UseSqlServer(connectionString);
+            optionsBuilder.UseNpgsql(connectionString);
         }
         else
         {
@@ -33,7 +33,8 @@ public class DevTaskHubContextFactory : IDesignTimeDbContextFactory<DevTaskHubCo
 
     private static string ResolveConnectionString(IConfiguration configuration, string[] args)
     {
-        var connectionString = configuration.GetConnectionString("DefaultConnection") ?? "Data Source=devtaskhub.db";
+        var connectionString = configuration.GetConnectionString("DefaultConnection") ??
+                               "Host=localhost;Port=5432;Database=devtaskhub;Username=devtaskhub;Password=devtaskhub";
 
         if (args.Length == 0)
         {
@@ -49,15 +50,16 @@ public class DevTaskHubContextFactory : IDesignTimeDbContextFactory<DevTaskHubCo
         return connectionString;
     }
 
-    private static bool IsSqlServerConnection(string connectionString)
+    private static bool IsPostgresConnection(string connectionString)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             return false;
         }
 
-        return connectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase)
-            || connectionString.Contains("Initial Catalog=", StringComparison.OrdinalIgnoreCase)
-            || connectionString.Contains(".database.windows.net", StringComparison.OrdinalIgnoreCase);
+        return connectionString.Contains("Host=", StringComparison.OrdinalIgnoreCase)
+            || connectionString.Contains("Username=", StringComparison.OrdinalIgnoreCase)
+            || connectionString.Contains("User ID=", StringComparison.OrdinalIgnoreCase)
+            || connectionString.Contains("Port=", StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -1,185 +1,196 @@
 trigger:
-- main
-
-pool:
-  name: Default
-  demands:
-  - Agent.OS -equals Darwin
+  - main
 
 variables:
   buildConfiguration: 'Release'
   dotNetVersion: '8.0.x'
+  azureSubscription: '$(azureSubscription)' # definir en variables del pipeline
+  backendWebAppQa: '$(backendWebAppQa)'     # definir en variables del pipeline
+  backendWebAppProd: '$(backendWebAppProd)' # definir en variables del pipeline
+  frontendWebAppQa: '$(frontendWebAppQa)'   # definir en variables del pipeline
+  frontendWebAppProd: '$(frontendWebAppProd)' # definir en variables del pipeline
+
+pool:
+  vmImage: 'windows-latest'
 
 stages:
-- stage: Build
-  displayName: 'Build Backend + Frontend'
-  jobs:
-  - job: BuildJob
-    displayName: 'Build Everything'
-    steps:
+  - stage: Build
+    displayName: 'Build Backend + Frontend'
+    jobs:
+      - job: BuildJob
+        displayName: 'Build and Pack'
+        steps:
+          - task: UseDotNet@2
+            displayName: 'Use .NET SDK 8'
+            inputs:
+              packageType: 'sdk'
+              version: '$(dotNetVersion)'
 
-    # ===========================
-    # BACKEND (.NET 8)
-    # ===========================
+          - task: NodeTool@0
+            displayName: 'Install Node.js 18'
+            inputs:
+              versionSpec: '18.18.2'
 
-    - task: UseDotNet@2
-      displayName: 'Use .NET SDK 8'
-      inputs:
-        packageType: 'sdk'
-        version: '$(dotNetVersion)'
+          - task: DotNetCoreCLI@2
+            displayName: 'Restore Backend'
+            inputs:
+              command: 'restore'
+              projects: 'backend/**/*.csproj'
 
-    - script: |
-        set -e
-        JDK_ROOT="$(Agent.TempDirectory)/temurin-jdk"
-        mkdir -p "$JDK_ROOT"
+          - task: DotNetCoreCLI@2
+            displayName: 'Build Backend'
+            inputs:
+              command: 'build'
+              projects: 'backend/**/*.csproj'
+              arguments: '--configuration $(buildConfiguration) --no-restore'
 
-        echo "Descargando Temurin JDK 17..."
-        curl -L "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.13+11/OpenJDK17U-jdk_x64_mac_hotspot_17.0.13_11.tar.gz" -o "$JDK_ROOT/jdk.tar.gz"
+          - task: DotNetCoreCLI@2
+            displayName: 'Publish Backend Web API'
+            inputs:
+              command: 'publish'
+              publishWebProjects: true
+              arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/backend --no-build'
+              zipAfterPublish: true
 
-        echo "Descomprimiendo..."
-        tar -xzf "$JDK_ROOT/jdk.tar.gz" -C "$JDK_ROOT"
+          - script: |
+              set -e
+              cd frontend/devtaskhub-frontend
+              npm ci
+              npm run build
+            displayName: 'Build Frontend'
 
-        JAVA_HOME=$(find "$JDK_ROOT" -maxdepth 5 -type d -path "*Contents/Home" | head -n 1)
-        echo "JAVA_HOME detectado: $JAVA_HOME"
+          - script: |
+              set -e
+              cd frontend/devtaskhub-frontend
+              rm -rf $(Build.ArtifactStagingDirectory)/frontend/dist-qa
+              mkdir -p $(Build.ArtifactStagingDirectory)/frontend/dist-qa
+              cp -R dist/. $(Build.ArtifactStagingDirectory)/frontend/dist-qa
+            displayName: 'Stage Frontend QA build'
+            env:
+              VITE_API_BASE_URL: "https://$(backendWebAppQa).azurewebsites.net"
 
-        echo "##vso[task.setvariable variable=JAVA_HOME]$JAVA_HOME"
-        echo "##vso[task.setvariable variable=JAVA_HOME_17_X64]$JAVA_HOME"
-        echo "##vso[task.prependpath]$JAVA_HOME/bin"
-      displayName: 'Install Temurin JDK 17'
+          - script: |
+              set -e
+              cd frontend/devtaskhub-frontend
+              rm -rf dist
+              npm run build
+              rm -rf $(Build.ArtifactStagingDirectory)/frontend/dist-prod
+              mkdir -p $(Build.ArtifactStagingDirectory)/frontend/dist-prod
+              cp -R dist/. $(Build.ArtifactStagingDirectory)/frontend/dist-prod
+            displayName: 'Stage Frontend Prod build'
+            env:
+              VITE_API_BASE_URL: "https://$(backendWebAppProd).azurewebsites.net"
 
-    - task: SonarCloudPrepare@1
-      displayName: 'Prepare SonarCloud analysis'
-      inputs:
-        SonarCloud: 'devtaskhub-sonarcloud'
-        organization: 'ucc-vale-ingsw3'
-        scannerMode: 'MSBuild'
-        projectKey: 'valeperona_DevTaskHub'
-        projectName: 'DevTaskHub'
-        extraProperties: |
-          sonar.java.jdkHome=$(JAVA_HOME_17_X64)
-          sonar.cs.opencover.reportsPaths=$(Agent.TempDirectory)/**/coverage.cobertura.xml
-          sonar.javascript.lcov.reportPaths=frontend/devtaskhub-frontend/coverage/lcov.info
-          sonar.typescript.lcov.reportPaths=frontend/devtaskhub-frontend/coverage/lcov.info
+          - task: ArchiveFiles@2
+            displayName: 'Zip Frontend QA'
+            inputs:
+              rootFolderOrFile: '$(Build.ArtifactStagingDirectory)/frontend/dist-qa'
+              includeRootFolder: false
+              archiveType: 'zip'
+              archiveFile: '$(Build.ArtifactStagingDirectory)/frontend/frontend-qa.zip'
+              replaceExistingArchive: true
 
-    - task: DotNetCoreCLI@2
-      displayName: 'Restore Backend'
-      inputs:
-        command: 'restore'
-        projects: '**/*.csproj'
+          - task: ArchiveFiles@2
+            displayName: 'Zip Frontend Prod'
+            inputs:
+              rootFolderOrFile: '$(Build.ArtifactStagingDirectory)/frontend/dist-prod'
+              includeRootFolder: false
+              archiveType: 'zip'
+              archiveFile: '$(Build.ArtifactStagingDirectory)/frontend/frontend-prod.zip'
+              replaceExistingArchive: true
 
-    - task: DotNetCoreCLI@2
-      displayName: 'Build Backend'
-      inputs:
-        command: 'build'
-        projects: '**/*.csproj'
-        arguments: '--configuration $(buildConfiguration) --no-restore'
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish backend artifact'
+            inputs:
+              pathToPublish: '$(Build.ArtifactStagingDirectory)/backend'
+              artifactName: 'backend'
+              publishLocation: 'Container'
 
-    - task: DotNetCoreCLI@2
-      displayName: 'Run backend tests with coverage'
-      inputs:
-        command: 'test'
-        projects: 'backend/DevTaskHub.sln'
-        arguments: '--collect:"XPlat Code Coverage"'
-        publishTestResults: true
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish frontend artifacts'
+            inputs:
+              pathToPublish: '$(Build.ArtifactStagingDirectory)/frontend'
+              artifactName: 'frontend'
+              publishLocation: 'Container'
 
-    - task: DotNetCoreCLI@2
-      displayName: 'Publish Backend Web API'
-      inputs:
-        command: 'publish'
-        publishWebProjects: true
-        arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/backend --no-build'
-        zipAfterPublish: true
+  - stage: Deploy_QA
+    displayName: 'Deploy to QA'
+    dependsOn: Build
+    condition: succeeded()
+    jobs:
+      - deployment: DeployBackendQA
+        displayName: 'Deploy Backend QA'
+        environment: 'QA'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: backend
+                - task: AzureWebApp@1
+                  displayName: 'Deploy API to QA'
+                  inputs:
+                    azureSubscription: '$(azureSubscription)'
+                    appType: 'webApp'
+                    appName: '$(backendWebAppQa)'
+                    package: '$(Pipeline.Workspace)/backend/**/*.zip'
+                    deploymentMethod: 'auto'
 
-    # ===========================
-    # FRONTEND (React + Vite + Cypress)
-    # ===========================
+      - deployment: DeployFrontendQA
+        displayName: 'Deploy Frontend QA'
+        environment: 'QA'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: frontend
+                - task: AzureWebApp@1
+                  displayName: 'Deploy Frontend to QA'
+                  inputs:
+                    azureSubscription: '$(azureSubscription)'
+                    appType: 'webApp'
+                    appName: '$(frontendWebAppQa)'
+                    package: '$(Pipeline.Workspace)/frontend/frontend-qa.zip'
+                    deploymentMethod: 'auto'
 
-    - task: NodeTool@0
-      displayName: 'Install Node.js 18.18.2'
-      inputs:
-        versionSpec: '18.18.2'
+  - stage: Deploy_PROD
+    displayName: 'Deploy to PROD'
+    dependsOn: Deploy_QA
+    condition: succeeded()
+    jobs:
+      - deployment: DeployBackendPROD
+        displayName: 'Deploy Backend PROD'
+        environment: 'PROD'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: backend
+                - task: AzureWebApp@1
+                  displayName: 'Deploy API to PROD'
+                  inputs:
+                    azureSubscription: '$(azureSubscription)'
+                    appType: 'webApp'
+                    appName: '$(backendWebAppProd)'
+                    package: '$(Pipeline.Workspace)/backend/**/*.zip'
+                    deploymentMethod: 'auto'
 
-    - script: |
-        npm ci
-        npm run test:run -- --coverage
-        npm run cy:run
-      displayName: 'Run frontend unit tests + Cypress E2E'
-      workingDirectory: 'frontend/devtaskhub-frontend'
-
-    - task: PublishCodeCoverageResults@2
-      displayName: 'Publish backend and frontend coverage'
-      inputs:
-        codeCoverageTool: 'Cobertura'
-        summaryFileLocation: |
-          $(Agent.TempDirectory)/**/coverage.cobertura.xml
-          frontend/devtaskhub-frontend/coverage/lcov.info
-        reportDirectory: '$(System.DefaultWorkingDirectory)/coverage-report'
-        failIfCoverageEmpty: false
-
-    - script: |
-        set -e
-        cd frontend/devtaskhub-frontend
-        rm -rf dist
-        npm run build
-        rm -rf $(Build.ArtifactStagingDirectory)/frontend/dist-qa
-        mkdir -p $(Build.ArtifactStagingDirectory)/frontend/dist-qa
-        cp -R dist/. $(Build.ArtifactStagingDirectory)/frontend/dist-qa
-      displayName: 'Build Frontend (QA)'
-      env:
-        VITE_API_BASE_URL: "https://devtaskhub-backend-qa-hmfzd9aqh3dcc7b5.centralus-01.azurewebsites.net"
-
-    - script: |
-        set -e
-        cd frontend/devtaskhub-frontend
-        rm -rf dist
-        npm run build
-        rm -rf $(Build.ArtifactStagingDirectory)/frontend/dist-prod
-        mkdir -p $(Build.ArtifactStagingDirectory)/frontend/dist-prod
-        cp -R dist/. $(Build.ArtifactStagingDirectory)/frontend/dist-prod
-      displayName: 'Build Frontend (Prod)'
-      env:
-        VITE_API_BASE_URL: "https://devtaskhub-backend-prod-cvbdd2brc6fchbbk.centralus-01.azurewebsites.net"
-
-    - task: SonarCloudAnalyze@1
-      displayName: 'Run SonarCloud code analysis'
-
-    - task: ArchiveFiles@2
-      displayName: 'Zip Frontend QA'
-      inputs:
-        rootFolderOrFile: '$(Build.ArtifactStagingDirectory)/frontend/dist-qa'
-        includeRootFolder: false
-        archiveType: 'zip'
-        archiveFile: '$(Build.ArtifactStagingDirectory)/frontend/frontend-qa.zip'
-        replaceExistingArchive: true
-
-    - task: ArchiveFiles@2
-      displayName: 'Zip Frontend Prod'
-      inputs:
-        rootFolderOrFile: '$(Build.ArtifactStagingDirectory)/frontend/dist-prod'
-        includeRootFolder: false
-        archiveType: 'zip'
-        archiveFile: '$(Build.ArtifactStagingDirectory)/frontend/frontend-prod.zip'
-        replaceExistingArchive: true
-
-    # ===========================
-    # PUBLICAR ARTEFACTOS
-    # ===========================
-
-    - task: PublishBuildArtifacts@1
-      displayName: 'Publish Backend Artifact'
-      inputs:
-        pathToPublish: '$(Build.ArtifactStagingDirectory)/backend'
-        artifactName: 'drop'
-        publishLocation: 'Container'
-
-    - task: PublishBuildArtifacts@1
-      displayName: 'Publish Frontend Artifact'
-      inputs:
-        pathToPublish: '$(Build.ArtifactStagingDirectory)/frontend'
-        artifactName: 'frontend'
-        publishLocation: 'Container'
-
-    - task: SonarCloudPublish@1
-      displayName: 'Publish SonarCloud Quality Gate Result'
-      inputs:
-        pollingTimeoutSec: '300'
+      - deployment: DeployFrontendPROD
+        displayName: 'Deploy Frontend PROD'
+        environment: 'PROD'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: frontend
+                - task: AzureWebApp@1
+                  displayName: 'Deploy Frontend to PROD'
+                  inputs:
+                    azureSubscription: '$(azureSubscription)'
+                    appType: 'webApp'
+                    appName: '$(frontendWebAppProd)'
+                    package: '$(Pipeline.Workspace)/frontend/frontend-prod.zip'
+                    deploymentMethod: 'auto'

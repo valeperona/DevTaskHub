@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  devtaskhub-db:
+    image: postgres:16
+    container_name: devtaskhub-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: devtaskhub
+      POSTGRES_USER: devtaskhub
+      POSTGRES_PASSWORD: devtaskhub
+    ports:
+      - "55432:5432"
+    volumes:
+      - devtaskhub-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  devtaskhub-postgres-data:

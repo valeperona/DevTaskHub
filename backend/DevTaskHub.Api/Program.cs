@@ -1,7 +1,12 @@
 using DevTaskHub.Api.Data;
+using DevTaskHub.Api.Models;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
@@ -11,6 +16,7 @@ builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
     });
 
 builder.Services.AddEndpointsApiExplorer();
@@ -30,9 +36,36 @@ builder.Services.AddCors(options =>
     });
 });
 
+// --- Auth JWT ---
+var jwtSection = configuration.GetSection("Jwt");
+var secretKey = jwtSection["SecretKey"] ?? "supersecret-devtaskhub-key-change-me";
+var issuer = jwtSection["Issuer"];
+var audience = jwtSection["Audience"];
+var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = !string.IsNullOrWhiteSpace(issuer),
+            ValidIssuer = issuer,
+            ValidateAudience = !string.IsNullOrWhiteSpace(audience),
+            ValidAudience = audience,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = signingKey,
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromMinutes(2)
+        };
+    });
+
+builder.Services.AddAuthorization();
+builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
+
 // --- 2. Configuración de Base de Datos (FIX para EF Core Design Time) ---
 
-var connectionString = configuration.GetConnectionString("DefaultConnection") ?? "Data Source=devtaskhub.db";
+var connectionString = configuration.GetConnectionString("DefaultConnection") ??
+                       "Host=localhost;Port=5432;Database=devtaskhub;Username=devtaskhub;Password=devtaskhub";
 
 // FIX: Solo se ejecuta AddDbContext si NO estamos en Design Time (cuando dotnet ef lo usa).
 // Si estamos en Design Time, EF Core usará la clase DevTaskHubContextFactory que creamos.
@@ -40,15 +73,7 @@ if (Environment.GetEnvironmentVariable("ASPNETCORE_HOSTINGSTARTUPASSEMBLIES") ==
 {
     builder.Services.AddDbContext<DevTaskHubContext>(options =>
     {
-        if (builder.Environment.IsDevelopment())
-        {
-            options.UseSqlite(connectionString);
-        }
-        else
-        {
-            // Usará SQL Server en QA y PROD (ya que ASPNETCORE_ENVIRONMENT != Development)
-            options.UseSqlServer(connectionString);
-        }
+        options.UseNpgsql(connectionString);
     });
 }
 
@@ -75,6 +100,7 @@ else
 }
 
 app.UseCors("AllowFrontend");
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 

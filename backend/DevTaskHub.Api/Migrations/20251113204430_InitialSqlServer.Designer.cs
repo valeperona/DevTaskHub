@@ -19,75 +19,142 @@ namespace DevTaskHub.Api.Migrations
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.8")
-                .HasAnnotation("Relational:MaxIdentifierLength", 128);
-
-            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+            modelBuilder.HasAnnotation("ProductVersion", "8.0.8");
 
             modelBuilder.Entity("DevTaskHub.Api.Models.Project", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
+                        .ValueGeneratedOnAdd();
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<string>("Description")
-                        .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)");
+                        .HasMaxLength(2000);
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .HasMaxLength(200);
+
+                    b.Property<Guid>("OwnerId");
 
                     b.HasKey("Id");
 
+                    b.HasIndex("OwnerId");
+
                     b.ToTable("Projects");
+                });
+
+            modelBuilder.Entity("DevTaskHub.Api.Models.ProjectMember", b =>
+                {
+                    b.Property<Guid>("ProjectId");
+
+                    b.Property<Guid>("UserId");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20);
+
+                    b.HasKey("ProjectId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("ProjectMembers");
+                });
+
+            modelBuilder.Entity("DevTaskHub.Api.Models.User", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd();
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(200);
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasMaxLength(200);
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.ToTable("Users");
                 });
 
             modelBuilder.Entity("DevTaskHub.Api.Models.TaskItem", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
+                        .ValueGeneratedOnAdd();
+
+                    b.Property<Guid?>("AssignedToUserId");
+
+                    b.Property<bool>("CompletedLate");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<string>("Description")
-                        .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)");
+                        .HasMaxLength(2000);
+
+                    b.Property<DateTime?>("DueDate");
+
+                    b.Property<string>("Labels")
+                        .IsRequired()
+                        .HasMaxLength(500);
 
                     b.Property<string>("Priority")
                         .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                        .HasMaxLength(20);
 
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<Guid>("ProjectId");
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                        .HasMaxLength(20);
 
                     b.Property<string>("Title")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .HasMaxLength(200);
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AssignedToUserId");
 
                     b.HasIndex("ProjectId");
 
                     b.ToTable("TaskItems");
+                });
+
+            modelBuilder.Entity("DevTaskHub.Api.Models.TaskChecklistItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd();
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<bool>("IsDone");
+
+                    b.Property<Guid>("TaskItemId");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200);
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TaskItemId");
+
+                    b.ToTable("TaskChecklistItems");
                 });
 
             modelBuilder.Entity("DevTaskHub.Api.Models.TaskItem", b =>
@@ -98,12 +165,74 @@ namespace DevTaskHub.Api.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("DevTaskHub.Api.Models.User", "AssignedTo")
+                        .WithMany()
+                        .HasForeignKey("AssignedToUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("AssignedTo");
+
                     b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("DevTaskHub.Api.Models.TaskChecklistItem", b =>
+                {
+                    b.HasOne("DevTaskHub.Api.Models.TaskItem", "TaskItem")
+                        .WithMany("Checklist")
+                        .HasForeignKey("TaskItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("TaskItem");
+                });
+
+            modelBuilder.Entity("DevTaskHub.Api.Models.ProjectMember", b =>
+                {
+                    b.HasOne("DevTaskHub.Api.Models.Project", "Project")
+                        .WithMany("Members")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DevTaskHub.Api.Models.User", "User")
+                        .WithMany("Memberships")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("DevTaskHub.Api.Models.Project", b =>
                 {
+                    b.HasOne("DevTaskHub.Api.Models.User", "Owner")
+                        .WithMany("Projects")
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("DevTaskHub.Api.Models.Project", b =>
+                {
+                    b.Navigation("Members");
+
                     b.Navigation("Tasks");
+                });
+
+            modelBuilder.Entity("DevTaskHub.Api.Models.User", b =>
+                {
+                    b.Navigation("Memberships");
+
+                    b.Navigation("Projects");
+                });
+
+            modelBuilder.Entity("DevTaskHub.Api.Models.TaskItem", b =>
+                {
+                    b.Navigation("Checklist");
                 });
 #pragma warning restore 612, 618
         }

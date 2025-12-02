@@ -1,0 +1,123 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.controls button,
+.controls select {
+  padding: 0.45rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #cbd5f5;
+  background: #fff;
+  cursor: pointer;
+}
+
+.controls button {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+
+.meta {
+  color: #475569;
+}
+
+.error {
+  color: #dc2626;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+
+.day {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.65rem;
+  min-height: 140px;
+}
+
+.dayHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+
+.card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.cardHeader {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-weight: 600;
+}
+
+.badge {
+  background: #e2e8f0;
+  color: #0f172a;
+  padding: 0.2rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+}
+
+.badgeLight {
+  background: #cbd5f5;
+  color: #0f172a;
+  padding: 0.2rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+}
+
+.badgeDanger {
+  background: #ef4444;
+  color: #fff;
+  padding: 0.2rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+}
+
+.metaRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.overdue {
+  border-color: #ef4444;
+}
+
+.empty {
+  color: #94a3b8;
+  font-size: 0.9rem;
+  margin: 0;
+}
