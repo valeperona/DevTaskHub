@@ -15,6 +15,7 @@ variables:
   backendWebAppProd: 'devtaskhub-backend-prod'
   frontendWebAppQa: 'devtaskhub-frontend-qa'
   frontendWebAppProd: 'devtaskhub-frontend-prod'
+  backendWebAppQaHost: 'devtaskhub-backend-qa-hmfzd9aqh3dcc7b5.centralus-01.azurewebsites.net'
 
 # Usamos tu agente self-hosted Mac
 pool:
@@ -161,11 +162,13 @@ stages:
                     deploymentMethod: 'auto'
 
                 # Health check backend QA con URL fija
-                - script: |
-                    set -e
-                    echo "Checking https://devtaskhub-backend-qa-hmfzd9qqh3dcc7b5.centralus-01.azurewebsites.net/api/health ..."
-                    curl -f https://devtaskhub-backend-qa-hmfzd9qqh3dcc7b5.centralus-01.azurewebsites.net/api/health
+                - task: Bash@3
                   displayName: 'Health Check Backend QA'
+                  inputs:
+                    targetType: 'inline'
+                    script: |
+                      echo "Checking https://$(backendWebAppQaHost)/api/health ..."
+                      curl -f "https://$(backendWebAppQaHost)/api/health"
 
       - deployment: DeployFrontendQA
         displayName: 'Deploy Frontend QA'
