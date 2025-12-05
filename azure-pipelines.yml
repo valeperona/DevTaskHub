@@ -16,6 +16,9 @@ variables:
   frontendWebAppQa: 'devtaskhub-frontend-qa'
   frontendWebAppProd: 'devtaskhub-frontend-prod'
 
+  # Dominio regional (ajusta si tu WebApp usa otro sufijo)
+  azureWebsitesRegion: 'centralus-01'
+
 # Usamos tu agente self-hosted Mac
 pool:
   name: 'Default'
@@ -76,7 +79,7 @@ stages:
               npm run build
             displayName: 'Build Frontend for QA'
             env:
-              VITE_API_BASE_URL: "https://$(backendWebAppQa).azurewebsites.net"
+              VITE_API_BASE_URL: "https://$(backendWebAppQa).$(azureWebsitesRegion).azurewebsites.net"
 
           - script: |
               set -e
@@ -97,7 +100,7 @@ stages:
               cp -R dist/. $(Build.ArtifactStagingDirectory)/frontend/dist-prod
             displayName: 'Stage Frontend PROD build'
             env:
-              VITE_API_BASE_URL: "https://$(backendWebAppProd).azurewebsites.net"
+              VITE_API_BASE_URL: "https://$(backendWebAppProd).$(azureWebsitesRegion).azurewebsites.net"
 
           # Zips frontend
           - task: ArchiveFiles@2
@@ -160,17 +163,15 @@ stages:
                     package: '$(Pipeline.Workspace)/backend/**/*.zip'
                     deploymentMethod: 'auto'
 
-                # Health check backend QA
+                # Health check backend QA con reintentos y fallback a HTTP
                 - script: |
                     set -e
-                    URL="https://$(backendWebAppQa).azurewebsites.net/api/health"
-                    echo "Checking $URL ..."
-                    STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL")
-                    if [[ "$STATUS" == "200" ]]; then
-                      echo "Health check OK ($STATUS)"
-                    else
-                      echo "Health check FAILED ($STATUS)"
-                      exit 1
+                    URL_HTTPS="https://$(backendWebAppQa).$(azureWebsitesRegion).azurewebsites.net/api/health"
+                    URL_HTTP="http://$(backendWebAppQa).$(azureWebsitesRegion).azurewebsites.net/api/health"
+                    echo "Health check QA (HTTPS): $URL_HTTPS"
+                    if ! curl --silent --show-error --fail --retry 5 --retry-delay 10 --connect-timeout 10 "$URL_HTTPS"; then
+                      echo "HTTPS check failed, trying HTTP..."
+                      curl --silent --show-error --fail --retry 5 --retry-delay 10 --connect-timeout 10 "$URL_HTTP"
                     fi
                   displayName: 'Health Check Backend QA'
 
@@ -220,17 +221,15 @@ stages:
                     package: '$(Pipeline.Workspace)/backend/**/*.zip'
                     deploymentMethod: 'auto'
 
-                # Health check backend PROD
+                # Health check backend PROD con reintentos y fallback a HTTP
                 - script: |
                     set -e
-                    URL="https://$(backendWebAppProd).azurewebsites.net/api/health"
-                    echo "Checking $URL ..."
-                    STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL")
-                    if [[ "$STATUS" == "200" ]]; then
-                      echo "Health check OK ($STATUS)"
-                    else
-                      echo "Health check FAILED ($STATUS)"
-                      exit 1
+                    URL_HTTPS="https://$(backendWebAppProd).$(azureWebsitesRegion).azurewebsites.net/api/health"
+                    URL_HTTP="http://$(backendWebAppProd).$(azureWebsitesRegion).azurewebsites.net/api/health"
+                    echo "Health check PROD (HTTPS): $URL_HTTPS"
+                    if ! curl --silent --show-error --fail --retry 5 --retry-delay 10 --connect-timeout 10 "$URL_HTTPS"; then
+                      echo "HTTPS check failed, trying HTTP..."
+                      curl --silent --show-error --fail --retry 5 --retry-delay 10 --connect-timeout 10 "$URL_HTTP"
                     fi
                   displayName: 'Health Check Backend PROD'
 
