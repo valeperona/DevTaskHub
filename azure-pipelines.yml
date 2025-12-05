@@ -72,7 +72,7 @@ stages:
           - script: |
               set -e
               cd frontend/devtaskhub-frontend
-              npm ci
+              npm ci --legacy-peer-deps
               npm run build
             displayName: 'Build Frontend for QA'
             env:
