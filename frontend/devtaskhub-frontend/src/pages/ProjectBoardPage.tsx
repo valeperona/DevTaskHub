@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { apiClient } from '../api/apiClient';
-import type { Project, ProjectMember, TaskItem, TaskPriority, TaskStatus } from '../api/apiClient';
+import type { Project, ProjectMember, ProjectRole, TaskItem, TaskPriority, TaskStatus } from '../api/apiClient';
 import styles from './ProjectBoardPage.module.css';
 
 const statusColumns: TaskStatus[] = ['ToDo', 'InProgress', 'InReview', 'Done'];
@@ -31,7 +31,7 @@ export function ProjectBoardPage() {
   });
   const [filters, setFilters] = useState({ assignee: 'all', priority: 'all' as 'all' | TaskPriority });
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
-  const [newMember, setNewMember] = useState({ email: '', role: 'Collaborator' as 'Collaborator' | 'Owner' | 'Viewer' });
+  const [newMember, setNewMember] = useState<{ email: string; role: ProjectRole }>({ email: '', role: 'Collaborator' });
   const [formError, setFormError] = useState<string | null>(null);
   const session = useMemo(() => {
     const stored = localStorage.getItem('devtaskhub:session');
@@ -58,7 +58,7 @@ export function ProjectBoardPage() {
     loadProject();
   }, [projectId]);
 
-  const userRole = useMemo(() => {
+  const userRole: ProjectRole | null = useMemo(() => {
     if (!project || !session?.userId) return null;
     if (project.ownerId === session.userId) return 'Owner';
     const member = project.members?.find((m) => m.userId === session.userId);
@@ -218,7 +218,7 @@ export function ProjectBoardPage() {
           />
           <select
             value={newMember.role}
-            onChange={(e) => setNewMember((prev) => ({ ...prev, role: e.target.value as 'Collaborator' | 'Owner' | 'Viewer' }))}
+            onChange={(e) => setNewMember((prev) => ({ ...prev, role: e.target.value as ProjectRole }))}
             data-cy="member-role-select"
           >
             <option value="Collaborator">Colaborador</option>

@@ -39,9 +39,9 @@ stages:
               version: '$(dotNetVersion)'
 
           - task: NodeTool@0
-            displayName: 'Install Node.js 18'
+            displayName: 'Install Node.js 20'
             inputs:
-              versionSpec: '18.18.2'
+              versionSpec: '20.x'
 
           # Backend
           - task: DotNetCoreCLI@2

@@ -1,6 +1,6 @@
 export type TaskStatus = 'ToDo' | 'InProgress' | 'InReview' | 'Done';
 export type TaskPriority = 'Low' | 'Medium' | 'High';
-export type ProjectRole = 'Owner' | 'Collaborator';
+export type ProjectRole = 'Owner' | 'Collaborator' | 'Viewer';
 
 export interface TaskItem {
   id: string;
