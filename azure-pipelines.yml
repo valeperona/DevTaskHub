@@ -6,11 +6,11 @@ variables:
   buildConfiguration: 'Release'
   dotNetVersion: '8.0.x'
 
-  # Service connections ya creadas
+  # Service connections (nombres EXACTOS en Azure DevOps)
   azureSubscriptionQa: 'azure-qa-connection'
   azureSubscriptionProd: 'azure-prod-connection'
 
-  # Nombres de las Web Apps de Azure
+  # Nombres de las Web Apps de Azure (App Service)
   backendWebAppQa: 'devtaskhub-backend-qa'
   backendWebAppProd: 'devtaskhub-backend-prod'
   frontendWebAppQa: 'devtaskhub-frontend-qa'
@@ -43,7 +43,9 @@ stages:
             inputs:
               versionSpec: '20.x'
 
+          # ===========================
           # Backend
+          # ===========================
           - task: DotNetCoreCLI@2
             displayName: 'Restore Backend'
             inputs:
@@ -68,7 +70,9 @@ stages:
                 --no-build
               zipAfterPublish: true
 
-          # Frontend – build apuntando a QA
+          # ===========================
+          # Frontend – build QA
+          # ===========================
           - script: |
               set -e
               cd frontend/devtaskhub-frontend
@@ -81,25 +85,29 @@ stages:
           - script: |
               set -e
               cd frontend/devtaskhub-frontend
-              rm -rf $(Build.ArtifactStagingDirectory)/frontend/dist-qa
-              mkdir -p $(Build.ArtifactStagingDirectory)/frontend/dist-qa
-              cp -R dist/. $(Build.ArtifactStagingDirectory)/frontend/dist-qa
+              rm -rf "$(Build.ArtifactStagingDirectory)/frontend/dist-qa"
+              mkdir -p "$(Build.ArtifactStagingDirectory)/frontend/dist-qa"
+              cp -R dist/. "$(Build.ArtifactStagingDirectory)/frontend/dist-qa"
             displayName: 'Stage Frontend QA build'
 
-          # Frontend – rebuild apuntando a PROD
+          # ===========================
+          # Frontend – build PROD
+          # ===========================
           - script: |
               set -e
               cd frontend/devtaskhub-frontend
               rm -rf dist
               npm run build
-              rm -rf $(Build.ArtifactStagingDirectory)/frontend/dist-prod
-              mkdir -p $(Build.ArtifactStagingDirectory)/frontend/dist-prod
-              cp -R dist/. $(Build.ArtifactStagingDirectory)/frontend/dist-prod
+              rm -rf "$(Build.ArtifactStagingDirectory)/frontend/dist-prod"
+              mkdir -p "$(Build.ArtifactStagingDirectory)/frontend/dist-prod"
+              cp -R dist/. "$(Build.ArtifactStagingDirectory)/frontend/dist-prod"
             displayName: 'Stage Frontend PROD build'
             env:
               VITE_API_BASE_URL: "https://$(backendWebAppProd).azurewebsites.net"
 
-          # Zips frontend
+          # ===========================
+          # Zips frontend (QA / PROD)
+          # ===========================
           - task: ArchiveFiles@2
             displayName: 'Zip Frontend QA'
             inputs:
@@ -118,7 +126,9 @@ stages:
               archiveFile: '$(Build.ArtifactStagingDirectory)/frontend/frontend-prod.zip'
               replaceExistingArchive: true
 
+          # ===========================
           # Publicación de artefactos
+          # ===========================
           - task: PublishBuildArtifacts@1
             displayName: 'Publish backend artifact'
             inputs:
@@ -143,7 +153,7 @@ stages:
     jobs:
       - deployment: DeployBackendQA
         displayName: 'Deploy Backend QA'
-        environment: 'QA'
+        environment: 'QA'   # nombre del Environment en Azure DevOps
         strategy:
           runOnce:
             deploy:
@@ -204,7 +214,7 @@ stages:
     jobs:
       - deployment: DeployBackendPROD
         displayName: 'Deploy Backend PROD'
-        environment: 'PROD'
+        environment: 'PROD'   # nombre del Environment de producción
         strategy:
           runOnce:
             deploy:
@@ -222,16 +232,19 @@ stages:
                     deploymentMethod: 'auto'
 
                 # Health check backend PROD con reintentos y fallback a HTTP
-                - script: |
-                    set -e
-                    URL_HTTPS="https://$(backendWebAppProd).azurewebsites.net/api/health"
-                    URL_HTTP="http://$(backendWebAppProd).azurewebsites.net/api/health"
-                    echo "Health check PROD (HTTPS): $URL_HTTPS"
-                    if ! curl --silent --show-error --fail --retry 5 --retry-delay 10 --connect-timeout 10 "$URL_HTTPS"; then
-                      echo "HTTPS check failed, trying HTTP..."
-                      curl --silent --show-error --fail --retry 5 --retry-delay 10 --connect-timeout 10 "$URL_HTTP"
-                    fi
+                - task: Bash@3
                   displayName: 'Health Check Backend PROD'
+                  inputs:
+                    targetType: 'inline'
+                    script: |
+                      set -e
+                      URL_HTTPS="https://$(backendWebAppProd).azurewebsites.net/api/health"
+                      URL_HTTP="http://$(backendWebAppProd).azurewebsites.net/api/health"
+                      echo "Health check PROD (HTTPS): $URL_HTTPS"
+                      if ! curl --silent --show-error --fail --retry 5 --retry-delay 10 --connect-timeout 10 "$URL_HTTPS"; then
+                        echo "HTTPS check failed, trying HTTP..."
+                        curl --silent --show-error --fail --retry 5 --retry-delay 10 "$URL_HTTP"
+                      fi
 
       - deployment: DeployFrontendPROD
         displayName: 'Deploy Frontend PROD'
