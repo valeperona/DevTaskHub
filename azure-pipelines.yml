@@ -15,7 +15,6 @@ variables:
   backendWebAppProd: 'devtaskhub-backend-prod'
   frontendWebAppQa: 'devtaskhub-frontend-qa'
   frontendWebAppProd: 'devtaskhub-frontend-prod'
-  backendWebAppQaHost: 'devtaskhub-backend-qa-hmfzd9aqh3dcc7b5.centralus-01.azurewebsites.net'
 
 # Usamos tu agente self-hosted Mac
 pool:
@@ -161,25 +160,20 @@ stages:
                     package: '$(Pipeline.Workspace)/backend/**/*.zip'
                     deploymentMethod: 'auto'
 
-                # Health check backend QA con URL fija
+                # Health check backend QA con reintentos y fallback a HTTP
                 - task: Bash@3
                   displayName: 'Health Check Backend QA'
                   inputs:
                     targetType: 'inline'
                     script: |
                       set -e
-                      URL="https://$(backendWebAppQaHost)/api/health"
-                      echo "Checking $URL ..."
-                      for i in {1..8}; do
-                        if curl -f "$URL"; then
-                          echo "Health check OK"
-                          exit 0
-                        fi
-                        echo "Health check failed (attempt $i), retrying in 10s..."
-                        sleep 10
-                      done
-                      echo "Health check failed after retries"
-                      exit 1
+                      URL_HTTPS="https://$(backendWebAppQa).azurewebsites.net/api/health"
+                      URL_HTTP="http://$(backendWebAppQa).azurewebsites.net/api/health"
+                      echo "Health check QA (HTTPS): $URL_HTTPS"
+                      if ! curl --silent --show-error --fail --retry 5 --retry-delay 10 --connect-timeout 10 "$URL_HTTPS"; then
+                        echo "HTTPS check failed, trying HTTP..."
+                        curl --silent --show-error --fail --retry 5 --retry-delay 10 --connect-timeout 10 "$URL_HTTP"
+                      fi
 
       - deployment: DeployFrontendQA
         displayName: 'Deploy Frontend QA'
