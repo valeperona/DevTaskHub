@@ -167,8 +167,19 @@ stages:
                   inputs:
                     targetType: 'inline'
                     script: |
-                      echo "Checking https://$(backendWebAppQaHost)/api/health ..."
-                      curl -f "https://$(backendWebAppQaHost)/api/health"
+                      set -e
+                      URL="https://$(backendWebAppQaHost)/api/health"
+                      echo "Checking $URL ..."
+                      for i in {1..8}; do
+                        if curl -f "$URL"; then
+                          echo "Health check OK"
+                          exit 0
+                        fi
+                        echo "Health check failed (attempt $i), retrying in 10s..."
+                        sleep 10
+                      done
+                      echo "Health check failed after retries"
+                      exit 1
 
       - deployment: DeployFrontendQA
         displayName: 'Deploy Frontend QA'
