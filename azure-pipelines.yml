@@ -16,6 +16,11 @@ variables:
   frontendWebAppQa: 'devtaskhub-frontend-qa'
   frontendWebAppProd: 'devtaskhub-frontend-prod'
 
+  # Dominios REALES (Dominio predeterminado en Azure → pestaña Introducción)
+  backendWebAppQaHost: 'devtaskhub-backend-qa-hmfzd9aqh3dcc7b5.centralus-01.azurewebsites.net'
+  # TODO: Reemplazar esto por el dominio predeterminado REAL de devtaskhub-backend-prod
+  backendWebAppProdHost: 'PONER_AQUI_EL_DOMINIO_PREDETERMINADO_DE_BACKEND_PROD'
+
 # Usamos tu agente self-hosted Mac
 pool:
   name: 'Default'
@@ -80,7 +85,8 @@ stages:
               npm run build
             displayName: 'Build Frontend for QA'
             env:
-              VITE_API_BASE_URL: "https://$(backendWebAppQa).azurewebsites.net"
+              # Apunta al dominio REAL del backend QA
+              VITE_API_BASE_URL: "https://$(backendWebAppQaHost)"
 
           - script: |
               set -e
@@ -103,7 +109,8 @@ stages:
               cp -R dist/. "$(Build.ArtifactStagingDirectory)/frontend/dist-prod"
             displayName: 'Stage Frontend PROD build'
             env:
-              VITE_API_BASE_URL: "https://$(backendWebAppProd).azurewebsites.net"
+              # Apunta al dominio REAL del backend PROD
+              VITE_API_BASE_URL: "https://$(backendWebAppProdHost)"
 
           # ===========================
           # Zips frontend (QA / PROD)
@@ -177,8 +184,8 @@ stages:
                     targetType: 'inline'
                     script: |
                       set -e
-                      URL_HTTPS="https://$(backendWebAppQa).azurewebsites.net/api/health"
-                      URL_HTTP="http://$(backendWebAppQa).azurewebsites.net/api/health"
+                      URL_HTTPS="https://$(backendWebAppQaHost)/api/health"
+                      URL_HTTP="http://$(backendWebAppQaHost)/api/health"
                       echo "Health check QA (HTTPS): $URL_HTTPS"
                       if ! curl --silent --show-error --fail --retry 5 --retry-delay 10 --connect-timeout 10 "$URL_HTTPS"; then
                         echo "HTTPS check failed, trying HTTP..."
@@ -238,8 +245,8 @@ stages:
                     targetType: 'inline'
                     script: |
                       set -e
-                      URL_HTTPS="https://$(backendWebAppProd).azurewebsites.net/api/health"
-                      URL_HTTP="http://$(backendWebAppProd).azurewebsites.net/api/health"
+                      URL_HTTPS="https://$(backendWebAppProdHost)/api/health"
+                      URL_HTTP="http://$(backendWebAppProdHost)/api/health"
                       echo "Health check PROD (HTTPS): $URL_HTTPS"
                       if ! curl --silent --show-error --fail --retry 5 --retry-delay 10 --connect-timeout 10 "$URL_HTTPS"; then
                         echo "HTTPS check failed, trying HTTP..."
