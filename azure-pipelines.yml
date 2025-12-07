@@ -19,7 +19,7 @@ variables:
   # Dominios REALES (Dominio predeterminado en Azure → pestaña Introducción)
   backendWebAppQaHost: 'devtaskhub-backend-qa-hmfzd9aqh3dcc7b5.centralus-01.azurewebsites.net'
   # TODO: Reemplazar esto por el dominio predeterminado REAL de devtaskhub-backend-prod
-  backendWebAppProdHost: 'PONER_AQUI_EL_DOMINIO_PREDETERMINADO_DE_BACKEND_PROD'
+  backendWebAppProdHost: 'devtaskhub-backend-prod-cvbdd2brc6fchbbk.centralus-01.azurewebsites.net'
 
 # Usamos tu agente self-hosted Mac
 pool:
