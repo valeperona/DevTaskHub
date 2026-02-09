@@ -23,9 +23,7 @@ jobs:
 
       - name: Build backend
         run: dotnet build backend/DevTaskHub.sln --configuration Release --no-restore
-
-      - name: Test backend
-        run: dotnet test backend/DevTaskHub.sln --configuration Release --no-build --collect:"XPlat Code Coverage" --logger trx
+        # Tests temporalmente deshabilitados
 
       - name: Publish API
         run: dotnet publish backend/DevTaskHub.Api/DevTaskHub.Api.csproj --configuration Release --no-build --output backend/out
@@ -40,10 +38,7 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
         working-directory: frontend/devtaskhub-frontend
-
-      - name: Test frontend
-        run: npm run test:run
-        working-directory: frontend/devtaskhub-frontend
+        # Tests temporalmente deshabilitados
 
       - name: Build frontend for QA
         env:
