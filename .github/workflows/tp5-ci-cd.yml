@@ -6,13 +6,21 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   build_and_pack:
+    name: Build and Pack
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ----------------------------
+      # BACKEND (.NET 8) - Build/Pack
+      # ----------------------------
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
@@ -21,21 +29,25 @@ jobs:
       - name: Restore .NET dependencies
         run: dotnet restore backend/DevTaskHub.sln
 
-      - name: Build backend (ignore warnings as errors)
-        run: dotnet build backend/DevTaskHub.sln --configuration Release --no-restore /warnaserror- -p:TreatWarningsAsErrors=false
+      - name: Build backend (do not fail on warnings)
+        run: dotnet build backend/DevTaskHub.sln --configuration Release --no-restore -p:TreatWarningsAsErrors=false -warnaserror:-
 
-      # Tests deshabilitados temporalmente; descomentar cuando se quieran ejecutar
+      # (Opcional) Tests backend - por ahora apagado
       # - name: Test backend
       #   run: dotnet test backend/DevTaskHub.sln --configuration Release --no-build --collect:"XPlat Code Coverage" --logger trx
 
       - name: Publish API
-        run: dotnet publish backend/DevTaskHub.Api/DevTaskHub.Api.csproj --configuration Release --no-build --output backend/out
+        run: dotnet publish backend/DevTaskHub.Api/DevTaskHub.Api.csproj --configuration Release --no-build -p:TreatWarningsAsErrors=false -warnaserror:- --output backend/out
 
-      - name: Zip backend artifact
-        run: |
-          cd backend/out
-          zip -r ../../backend.zip .
+      - name: Upload backend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-publish
+          path: backend/out
 
+      # ----------------------------
+      # FRONTEND (Node 20) - Build QA/PROD
+      # ----------------------------
       - name: Setup Node 20
         uses: actions/setup-node@v4
         with:
@@ -44,17 +56,16 @@ jobs:
           cache-dependency-path: frontend/devtaskhub-frontend/package-lock.json
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
         working-directory: frontend/devtaskhub-frontend
 
-      # Tests deshabilitados temporalmente; descomentar cuando se quieran ejecutar
+      # (Opcional) Tests frontend - por ahora apagado
       # - name: Test frontend
       #   run: npm run test:run
       #   working-directory: frontend/devtaskhub-frontend
 
       - name: Build frontend for QA
         env:
-          # TODO: Reemplazar con vars.API_BASE_URL desde environment QA si se necesita construir allí
           VITE_API_BASE_URL: ${{ vars.API_BASE_URL || 'https://placeholder-qa.local' }}
         run: |
           npm run build
@@ -63,129 +74,129 @@ jobs:
           cp -R dist/. ../dist-qa
         working-directory: frontend/devtaskhub-frontend
 
-      - name: Zip frontend QA artifact
-        run: |
-          cd frontend/dist-qa
-          zip -r ../../frontend-qa.zip .
-
       - name: Build frontend for PROD
         env:
-          # TODO: Reemplazar con vars.API_BASE_URL desde environment PROD si se necesita construir allí
           VITE_API_BASE_URL: ${{ vars.API_BASE_URL || 'https://placeholder-prod.local' }}
         run: |
+          rm -rf dist
           npm run build
           rm -rf ../dist-prod
           mkdir -p ../dist-prod
           cp -R dist/. ../dist-prod
         working-directory: frontend/devtaskhub-frontend
 
-      - name: Zip frontend PROD artifact
-        run: |
-          cd frontend/dist-prod
-          zip -r ../../frontend-prod.zip .
-
-      - name: Upload backend artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend.zip
-          path: backend.zip
-
       - name: Upload frontend QA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: frontend-qa.zip
-          path: frontend-qa.zip
+          name: frontend-qa-dist
+          path: frontend/dist-qa
 
       - name: Upload frontend PROD artifact
         uses: actions/upload-artifact@v4
         with:
-          name: frontend-prod.zip
-          path: frontend-prod.zip
+          name: frontend-prod-dist
+          path: frontend/dist-prod
 
   deploy_backend_qa:
+    name: Deploy Backend QA
     runs-on: ubuntu-latest
     needs: build_and_pack
+    if: github.ref == 'refs/heads/main'
     environment: QA
+
     steps:
       - name: Download backend artifact
         uses: actions/download-artifact@v4
         with:
-          name: backend.zip
+          name: backend-publish
           path: backend
 
-      - name: Simulated deploy backend QA
+      - name: Simulated deploy backend (QA)
         run: |
-          echo "Deploy Backend QA - Environment: ${{ vars.ENVIRONMENT }}"
+          echo "=== Deploy Backend QA ==="
+          echo "ENVIRONMENT: ${{ vars.ENVIRONMENT }}"
           echo "API_BASE_URL: ${{ vars.API_BASE_URL }}"
-          echo "DB_PROVIDER: ${{ vars.DB_PROVIDER }}"
-          echo "Backend artifact contents:"
+          echo "DB_PROVIDER:  ${{ vars.DB_PROVIDER }}"
+          echo "Backend files:"
           ls -R backend | sed 's/^/  /'
-          # TODO: Reemplazar por deploy real (ej. azure/webapps-deploy o gcloud run deploy)
+          # TODO: Reemplazar por deploy real (Azure WebApp / Cloud Run / etc.)
 
-      - name: Simulated health check QA
+      - name: Simulated health check backend (QA)
         run: |
-          echo "Health check to /api/health would run here"
-          # TODO: Usar curl https://<qa-backend-host>/api/health --retry 5 --retry-delay 5
+          echo "Health check would be: curl -fsS https://<qa-backend-host>/api/health"
+          # TODO: Implementar curl con reintentos cuando tengas URL real
 
   deploy_frontend_qa:
+    name: Deploy Frontend QA
     runs-on: ubuntu-latest
     needs: deploy_backend_qa
+    if: github.ref == 'refs/heads/main'
     environment: QA
+
     steps:
       - name: Download frontend QA artifact
         uses: actions/download-artifact@v4
         with:
-          name: frontend-qa.zip
+          name: frontend-qa-dist
           path: frontend-qa
 
-      - name: Simulated deploy frontend QA
+      - name: Simulated deploy frontend (QA)
         run: |
-          echo "Deploy Frontend QA - Environment: ${{ vars.ENVIRONMENT }}"
+          echo "=== Deploy Frontend QA ==="
+          echo "ENVIRONMENT: ${{ vars.ENVIRONMENT }}"
           echo "API_BASE_URL: ${{ vars.API_BASE_URL }}"
-          echo "Frontend QA artifact contents:"
+          echo "Frontend QA files:"
           ls -R frontend-qa | sed 's/^/  /'
-          # TODO: Reemplazar por deploy real (ej. azure/webapps-deploy para static site o storage+CDN)
+          # TODO: Reemplazar por deploy real
 
   deploy_backend_prod:
+    name: Deploy Backend PROD
     runs-on: ubuntu-latest
     needs: deploy_frontend_qa
+    if: github.ref == 'refs/heads/main'
     environment: PROD
+
     steps:
       - name: Download backend artifact
         uses: actions/download-artifact@v4
         with:
-          name: backend.zip
+          name: backend-publish
           path: backend
 
-      - name: Simulated deploy backend PROD
+      - name: Simulated deploy backend (PROD)
         run: |
-          echo "Deploy Backend PROD - Environment: ${{ vars.ENVIRONMENT }}"
+          echo "=== Deploy Backend PROD ==="
+          echo "ENVIRONMENT: ${{ vars.ENVIRONMENT }}"
           echo "API_BASE_URL: ${{ vars.API_BASE_URL }}"
-          echo "DB_PROVIDER: ${{ vars.DB_PROVIDER }}"
-          echo "Backend artifact contents:"
+          echo "DB_PROVIDER:  ${{ vars.DB_PROVIDER }}"
+          echo "Backend files:"
           ls -R backend | sed 's/^/  /'
-          # TODO: Reemplazar por deploy real (ej. azure/webapps-deploy o gcloud run deploy)
+          # TODO: Reemplazar por deploy real
 
-      - name: Simulated health check PROD
+      - name: Simulated health check backend (PROD)
         run: |
-          echo "Health check to /api/health would run here"
-          # TODO: Usar curl https://<prod-backend-host>/api/health --retry 5 --retry-delay 5
+          echo "Health check would be: curl -fsS https://<prod-backend-host>/api/health"
+          # TODO: Implementar curl con reintentos cuando tengas URL real
 
   deploy_frontend_prod:
+    name: Deploy Frontend PROD
     runs-on: ubuntu-latest
     needs: deploy_backend_prod
+    if: github.ref == 'refs/heads/main'
     environment: PROD
+
     steps:
       - name: Download frontend PROD artifact
         uses: actions/download-artifact@v4
         with:
-          name: frontend-prod.zip
+          name: frontend-prod-dist
           path: frontend-prod
 
-      - name: Simulated deploy frontend PROD
+      - name: Simulated deploy frontend (PROD)
         run: |
-          echo "Deploy Frontend PROD - Environment: ${{ vars.ENVIRONMENT }}"
+          echo "=== Deploy Frontend PROD ==="
+          echo "ENVIRONMENT: ${{ vars.ENVIRONMENT }}"
           echo "API_BASE_URL: ${{ vars.API_BASE_URL }}"
-          echo "Frontend PROD artifact contents:"
+          echo "Frontend PROD files:"
           ls -R frontend-prod | sed 's/^/  /'
-          # TODO: Reemplazar por deploy real (ej. azure/webapps-deploy para static site o storage+CDN)
+          # TODO: Reemplazar por deploy real
