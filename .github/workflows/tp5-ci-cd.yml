@@ -22,7 +22,7 @@ jobs:
         run: dotnet restore backend/DevTaskHub.sln
 
       - name: Build backend (ignore warnings as errors)
-        run: dotnet build backend/DevTaskHub.sln --configuration Release --no-restore /warnaserror:false
+        run: dotnet build backend/DevTaskHub.sln --configuration Release --no-restore /warnaserror- -p:TreatWarningsAsErrors=false
 
       # Tests deshabilitados temporalmente; descomentar cuando se quieran ejecutar
       # - name: Test backend
