@@ -28,6 +28,11 @@
 4. **Pipeline frontend**  
    - Se añadió un paso `npm run test:run` después de `npm install` para ejecutar Vitest en CI con `CI=true`.
 
+## TP06 – Estrategia de testing unificado
+- **Frameworks elegidos:** xUnit + coverlet para backend; Vitest + React Testing Library + JSDOM para frontend. Reporter JUnit habilitado en Vitest (genera `coverage/vitest-junit.xml`).
+- **Mocking/Aislamiento:** backend usa `Microsoft.EntityFrameworkCore.InMemory` para datos, helper de `ClaimsPrincipal` y pruebas AAA; se cubren controladores con reglas de negocio y roles. Frontend mockea `fetch` y el `apiClient` con `vi.mock`, y usa `localStorage` stub para sesiones.
+- **Cobertura:** backend se ejecuta con `--collect:"XPlat Code Coverage"`; frontend genera `coverage/` y `coverage/vitest-junit.xml`. Se publican resultados en Azure Pipelines.
+- **Casos relevantes cubiertos:** validaciones de Auth (duplicados, credenciales inválidas), Projects (owner/members, invitaciones, transferencia, leave con reasignación, permisos viewer), Tasks (transiciones, checklist pendiente, prioridad alta sin asignar, completedLate, asignación a viewer prohibida), API client (errores/headers/204), LoginPage (errores y éxito), ProjectsPage (load/create/delete), ProjectBoardPage (filtros, restricción viewer).
 ## Evidencias de ejecución
 1. **Backend:** `dotnet test backend/DevTaskHub.sln`  
    - Salida esperada: todas las suites (`DevTaskHub.Tests`) pasando. Guardar captura o log para defensa.

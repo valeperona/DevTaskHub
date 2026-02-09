@@ -13,7 +13,11 @@ export default mergeConfig(
         provider: 'v8',
         reportsDirectory: './coverage',
         reporter: ['text', 'lcov']
-      }
+      },
+      reporters: [
+        'default',
+        ['junit', { outputFile: 'coverage/vitest-junit.xml' }]
+      ]
     }
   })
 );

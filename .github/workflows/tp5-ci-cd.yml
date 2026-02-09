@@ -1,0 +1,152 @@
+name: TP5 CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build_test_package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore .NET dependencies
+        run: dotnet restore backend/DevTaskHub.sln
+
+      - name: Build backend
+        run: dotnet build backend/DevTaskHub.sln --configuration Release --no-restore
+
+      - name: Test backend
+        run: dotnet test backend/DevTaskHub.sln --configuration Release --no-build --collect:"XPlat Code Coverage" --logger trx
+
+      - name: Publish API
+        run: dotnet publish backend/DevTaskHub.Api/DevTaskHub.Api.csproj --configuration Release --no-build --output backend/out
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/devtaskhub-frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend/devtaskhub-frontend
+
+      - name: Test frontend
+        run: npm run test:run
+        working-directory: frontend/devtaskhub-frontend
+
+      - name: Build frontend for QA
+        env:
+          # Usa vars.API_BASE_URL si existe a nivel repo/org; si luego querés usar las variables del environment, pasa esta build al job QA.
+          VITE_API_BASE_URL: ${{ vars.API_BASE_URL || 'https://placeholder-qa.local' }}
+        run: |
+          npm run build
+          rm -rf ../dist-qa
+          mkdir -p ../dist-qa
+          cp -R dist/. ../dist-qa
+        working-directory: frontend/devtaskhub-frontend
+
+      - name: Build frontend for PROD
+        env:
+          VITE_API_BASE_URL: ${{ vars.API_BASE_URL || 'https://placeholder-prod.local' }}
+        run: |
+          rm -rf dist
+          npm run build
+          rm -rf ../dist-prod
+          mkdir -p ../dist-prod
+          cp -R dist/. ../dist-prod
+        working-directory: frontend/devtaskhub-frontend
+
+      - name: Upload backend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-publish
+          path: backend/out
+
+      - name: Upload frontend QA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-qa-dist
+          path: frontend/dist-qa
+
+      - name: Upload frontend PROD artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-prod-dist
+          path: frontend/dist-prod
+
+  deploy_qa:
+    runs-on: ubuntu-latest
+    needs: build_test_package
+    environment: QA
+    steps:
+      - name: Download backend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-publish
+          path: backend
+
+      - name: Download frontend QA artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-qa-dist
+          path: frontend-qa
+
+      - name: Simulated deploy (QA)
+        run: |
+          echo "Deploy QA - Environment: ${{ vars.ENVIRONMENT }}"
+          echo "API_BASE_URL: ${{ vars.API_BASE_URL }}"
+          echo "DB_PROVIDER: ${{ vars.DB_PROVIDER }}"
+          echo "Backend files:"
+          ls -R backend | sed 's/^/  /'
+          echo "Frontend QA files:"
+          ls -R frontend-qa | sed 's/^/  /'
+          # TODO: Reemplazar por deploy real (ej. azure/webapps-deploy o gcloud run deploy)
+
+      - name: Simulated health check
+        run: |
+          echo "Health check to /api/health would run here"
+          # TODO: Cambiar por curl https://<qa-backend-host>/api/health con reintentos
+
+  deploy_prod:
+    runs-on: ubuntu-latest
+    needs: deploy_qa
+    environment: PROD
+    steps:
+      - name: Download backend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-publish
+          path: backend
+
+      - name: Download frontend PROD artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-prod-dist
+          path: frontend-prod
+
+      - name: Simulated deploy (PROD)
+        run: |
+          echo "Deploy PROD - Environment: ${{ vars.ENVIRONMENT }}"
+          echo "API_BASE_URL: ${{ vars.API_BASE_URL }}"
+          echo "DB_PROVIDER: ${{ vars.DB_PROVIDER }}"
+          echo "Backend files:"
+          ls -R backend | sed 's/^/  /'
+          echo "Frontend PROD files:"
+          ls -R frontend-prod | sed 's/^/  /'
+          # TODO: Reemplazar por deploy real (ej. azure/webapps-deploy o gcloud run deploy)
+
+      - name: Simulated health check
+        run: |
+          echo "Health check to /api/health would run here"
+          # TODO: Cambiar por curl https://<prod-backend-host>/api/health con reintentos

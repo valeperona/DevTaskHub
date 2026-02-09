@@ -65,6 +65,14 @@ stages:
               arguments: '--configuration $(buildConfiguration) --no-restore'
 
           - task: DotNetCoreCLI@2
+            displayName: 'Run Backend Unit Tests'
+            inputs:
+              command: 'test'
+              projects: 'backend/DevTaskHub.sln'
+              arguments: '--configuration $(buildConfiguration) --no-build --collect:"XPlat Code Coverage" --logger trx'
+              publishTestResults: true
+
+          - task: DotNetCoreCLI@2
             displayName: 'Publish Backend Web API'
             inputs:
               command: 'publish'
@@ -82,6 +90,20 @@ stages:
               set -e
               cd frontend/devtaskhub-frontend
               npm ci --legacy-peer-deps
+              npm run test:run
+            displayName: 'Run Frontend Unit Tests'
+
+          - task: PublishTestResults@2
+            displayName: 'Publish Frontend Test Results'
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: 'frontend/devtaskhub-frontend/coverage/vitest-junit.xml'
+              failTaskOnFailedTests: true
+              testRunTitle: 'Frontend Unit Tests'
+
+          - script: |
+              set -e
+              cd frontend/devtaskhub-frontend
               npm run build
             displayName: 'Build Frontend for QA'
             env:

@@ -30,6 +30,7 @@ Comandos útiles:
 ```bash
 # Ejecutar tests
 DOTNET_CLI_HOME=../.dotnet dotnet test DevTaskHub.sln
+DOTNET_CLI_HOME=../.dotnet dotnet test DevTaskHub.sln --collect:"XPlat Code Coverage" --logger trx # con coverage
 
 # Crear nuevas migraciones (usa la herramienta local dotnet-ef)
 DOTNET_CLI_HOME=../.dotnet dotnet tool run dotnet-ef migrations add <Nombre>
@@ -40,6 +41,9 @@ DOTNET_CLI_HOME=../.dotnet dotnet tool run dotnet-ef migrations add <Nombre>
 cd frontend/devtaskhub-frontend
 npm install
 npm run dev -- --host 0.0.0.0 --port 5173
+# Tests frontend (Vitest + RTL + JUnit reporter)
+npm run test        # modo interactivo
+npm run test:run    # CI (genera coverage/ y coverage/vitest-junit.xml)
 ```
 
 - Variables: `VITE_API_BASE_URL` (default `http://localhost:5000`).
