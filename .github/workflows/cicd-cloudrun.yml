@@ -11,7 +11,7 @@ permissions:
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  REGION: ${{ vars.GCP_REGION }}
+  REGION: ${{ vars.GCP_REGION }}     # viene de Repo Variables o del Environment (si el job tiene environment:)
   GAR_REPO: devtaskhub
   IMAGE_NAME: devtaskhub-api
   SERVICE_QA: devtaskhub-api-qa
@@ -53,6 +53,7 @@ jobs:
         run: npm ci --legacy-peer-deps
         working-directory: frontend/devtaskhub-frontend
 
+      # Ajustá si usás Vitest/Jest:
       - name: Run frontend unit tests
         run: npm test -- --run
         working-directory: frontend/devtaskhub-frontend
@@ -66,10 +67,19 @@ jobs:
     runs-on: ubuntu-22.04
     needs: build_test
     if: github.ref == 'refs/heads/main'
+    environment: QA   # <<< IMPORTANTE: así inyecta vars/secrets del Environment QA
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Debug env (REGION should not be empty)
+        run: |
+          echo "PROJECT_ID=$PROJECT_ID"
+          echo "REGION=$REGION"
+          echo "GAR_REPO=$GAR_REPO"
+          echo "IMAGE_NAME=$IMAGE_NAME"
+          echo "SERVICE_QA=$SERVICE_QA"
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -79,25 +89,18 @@ jobs:
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      # ✅ FIX: armar el host en una variable para evitar que se parta "-docker.pkg.dev"
       - name: Configure Docker auth for Artifact Registry
-        shell: bash
-        run: |
-          GAR_HOST="${REGION}-docker.pkg.dev"
-          echo "GAR_HOST=$GAR_HOST"
-          gcloud auth configure-docker "$GAR_HOST" --quiet
+        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
 
       - name: Build & Push image to Artifact Registry
-        shell: bash
         run: |
           IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${GAR_REPO}/${IMAGE_NAME}:${GITHUB_SHA}"
           echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
-
+          echo "Using IMAGE_URI=$IMAGE_URI"
           docker build -t "$IMAGE_URI" -f backend/DevTaskHub.Api/Dockerfile .
           docker push "$IMAGE_URI"
 
       - name: Deploy to Cloud Run (QA)
-        shell: bash
         run: |
           gcloud run deploy "${SERVICE_QA}" \
             --image "${IMAGE_URI}" \
@@ -107,7 +110,6 @@ jobs:
             --set-env-vars "ASPNETCORE_ENVIRONMENT=QA"
 
       - name: Health check (QA)
-        shell: bash
         run: |
           QA_URL=$(gcloud run services describe "${SERVICE_QA}" --region "${REGION}" --format='value(status.url)')
           echo "QA_URL=$QA_URL"
@@ -118,11 +120,19 @@ jobs:
     runs-on: ubuntu-22.04
     needs: deploy_qa
     if: github.ref == 'refs/heads/main'
-    environment: PROD
+    environment: PROD  # <<< esto activa aprobación manual si la configuraste en GitHub Environments
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Debug env (REGION should not be empty)
+        run: |
+          echo "PROJECT_ID=$PROJECT_ID"
+          echo "REGION=$REGION"
+          echo "GAR_REPO=$GAR_REPO"
+          echo "IMAGE_NAME=$IMAGE_NAME"
+          echo "SERVICE_PROD=$SERVICE_PROD"
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -133,16 +143,13 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Configure Docker auth for Artifact Registry
-        shell: bash
-        run: |
-          GAR_HOST="${REGION}-docker.pkg.dev"
-          echo "GAR_HOST=$GAR_HOST"
-          gcloud auth configure-docker "$GAR_HOST" --quiet
+        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
 
+      # En PROD NO rebuildamos: usamos la misma imagen ya pusheada en QA (tag = GITHUB_SHA)
       - name: Deploy to Cloud Run (PROD)
-        shell: bash
         run: |
           IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${GAR_REPO}/${IMAGE_NAME}:${GITHUB_SHA}"
+          echo "Using IMAGE_URI=$IMAGE_URI"
 
           gcloud run deploy "${SERVICE_PROD}" \
             --image "${IMAGE_URI}" \
@@ -152,7 +159,6 @@ jobs:
             --set-env-vars "ASPNETCORE_ENVIRONMENT=PROD"
 
       - name: Health check (PROD)
-        shell: bash
         run: |
           PROD_URL=$(gcloud run services describe "${SERVICE_PROD}" --region "${REGION}" --format='value(status.url)')
           echo "PROD_URL=$PROD_URL"
