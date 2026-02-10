@@ -16,6 +16,8 @@ env:
   IMAGE_NAME: devtaskhub-api
   SERVICE_QA: devtaskhub-api-qa
   SERVICE_PROD: devtaskhub-api-prod
+  DB_CONN_QA: ${{ secrets.DB_CONNECTION_QA }}
+  DB_CONN_PROD: ${{ secrets.DB_CONNECTION_PROD }}
 
 jobs:
   build_test:
@@ -79,6 +81,14 @@ jobs:
             echo "ERROR: REGION is empty. Create GitHub Variable 'GCP_REGION' (repo or environment)."
             exit 1
           fi
+          if [ -z "${DB_CONN_PROD}" ]; then
+            echo "ERROR: DB_CONNECTION_PROD secret is empty. Create it with the PROD connection string."
+            exit 1
+          fi
+          if [ -z "${DB_CONN_QA}" ]; then
+            echo "ERROR: DB_CONNECTION_QA secret is empty. Create it with the QA connection string."
+            exit 1
+          fi
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -109,7 +119,7 @@ jobs:
             --region "${REGION}" \
             --platform managed \
             --allow-unauthenticated \
-            --set-env-vars "ASPNETCORE_ENVIRONMENT=QA"
+            --set-env-vars "ASPNETCORE_ENVIRONMENT=QA,ConnectionStrings__DefaultConnection=${DB_CONN_QA}"
 
       - name: Health check (QA)
         run: |
@@ -153,7 +163,7 @@ jobs:
             --region "${REGION}" \
             --platform managed \
             --allow-unauthenticated \
-            --set-env-vars "ASPNETCORE_ENVIRONMENT=PROD"
+            --set-env-vars "ASPNETCORE_ENVIRONMENT=PROD,ConnectionStrings__DefaultConnection=${DB_CONN_PROD}"
 
       - name: Health check (PROD)
         run: |

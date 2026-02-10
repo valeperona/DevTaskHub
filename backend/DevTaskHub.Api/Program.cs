@@ -82,10 +82,15 @@ var app = builder.Build();
 
 // --- 3. Migración Automática al Iniciar (Usa el contexto registrado) ---
 
-using (var scope = app.Services.CreateScope())
+try
 {
+    using var scope = app.Services.CreateScope();
     var dbContext = scope.ServiceProvider.GetRequiredService<DevTaskHubContext>();
     dbContext.Database.Migrate();
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"DB migrate failed: {ex.Message}");
 }
 
 // --- 4. Configuración del Pipeline HTTP ---
@@ -105,6 +110,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
+var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+app.Urls.Add($"http://0.0.0.0:{port}");
 app.Run();
 
 public partial class Program;
