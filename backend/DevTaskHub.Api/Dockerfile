@@ -1,176 +1,28 @@
-name: CI-CD (Cloud Run)
+# ---- build ----
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /src
 
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+# Copiamos el solution y los csproj primero para cachear restore
+COPY backend/DevTaskHub.sln backend/DevTaskHub.sln
+COPY backend/DevTaskHub.Api/DevTaskHub.Api.csproj backend/DevTaskHub.Api/DevTaskHub.Api.csproj
+COPY backend/DevTaskHub.Tests/DevTaskHub.Tests.csproj backend/DevTaskHub.Tests/DevTaskHub.Tests.csproj
 
-permissions:
-  contents: read
+RUN dotnet restore backend/DevTaskHub.sln
 
-env:
-  # GCP
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  REGION: ${{ vars.GCP_REGION }}
+# Copiamos el resto
+COPY backend/ backend/
 
-  # Artifact Registry
-  GAR_REPO: devtaskhub
-  IMAGE_NAME: devtaskhub-api
+# Publicamos
+RUN dotnet publish backend/DevTaskHub.Api/DevTaskHub.Api.csproj -c Release -o /app/publish
 
-  # Cloud Run services (QA/PROD separados)
-  SERVICE_QA: devtaskhub-api-qa
-  SERVICE_PROD: devtaskhub-api-prod
+# ---- runtime ----
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+WORKDIR /app
 
-jobs:
-  build_test:
-    name: Build & Test (Backend + Frontend)
-    runs-on: ubuntu-22.04
+COPY --from=build /app/publish .
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+# Cloud Run usa PORT (por default 8080). ASP.NET tiene que escuchar en ese puerto.
+ENV ASPNETCORE_URLS=http://0.0.0.0:8080
+EXPOSE 8080
 
-      # ---------- BACKEND (.NET) ----------
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.0.x
-
-      - name: Restore backend
-        run: dotnet restore backend/DevTaskHub.sln
-
-      - name: Build backend
-        run: dotnet build backend/DevTaskHub.sln -c Release --no-restore
-
-      - name: Test backend
-        run: dotnet test backend/DevTaskHub.Tests/DevTaskHub.Tests.csproj -c Release --no-build
-
-      # ---------- FRONTEND (Node) ----------
-      - name: Setup Node 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: frontend/devtaskhub-frontend/package-lock.json
-
-      - name: Install frontend deps
-        run: npm ci --legacy-peer-deps
-        working-directory: frontend/devtaskhub-frontend
-
-      # Ajustá si tu script de tests es distinto (ej: npm run test)
-      - name: Run frontend unit tests
-        run: npm test -- --run
-        working-directory: frontend/devtaskhub-frontend
-
-      - name: Build frontend
-        run: npm run build
-        working-directory: frontend/devtaskhub-frontend
-
-  deploy_qa:
-    name: Deploy to QA (Cloud Run)
-    runs-on: ubuntu-22.04
-    needs: build_test
-    if: github.ref == 'refs/heads/main'
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      # Corte rápido si falta REGION (es tu error anterior)
-      - name: Fail if REGION is empty
-        run: |
-          if [ -z "${REGION}" ]; then
-            echo "ERROR: REGION is empty. Create GitHub Variable 'GCP_REGION' (repo or environment)."
-            exit 1
-          fi
-
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      - name: Setup gcloud
-        uses: google-github-actions/setup-gcloud@v2
-
-      # ✅ Fix del error "unrecognized arguments: -docker.pkg.dev"
-      - name: Configure Docker auth for Artifact Registry
-        run: |
-          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
-
-      - name: Build & Push image to Artifact Registry
-        run: |
-          IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${GAR_REPO}/${IMAGE_NAME}:${GITHUB_SHA}"
-          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
-          docker build -t "$IMAGE_URI" -f backend/DevTaskHub.Api/Dockerfile .
-          docker push "$IMAGE_URI"
-
-      - name: Deploy to Cloud Run (QA)
-        run: |
-          gcloud run deploy "${SERVICE_QA}" \
-            --image "${IMAGE_URI}" \
-            --region "${REGION}" \
-            --platform managed \
-            --allow-unauthenticated \
-            --port 8080 \
-            --set-env-vars "ASPNETCORE_ENVIRONMENT=QA"
-
-      - name: Health check (QA)
-        run: |
-          QA_URL=$(gcloud run services describe "${SERVICE_QA}" --region "${REGION}" --format='value(status.url)')
-          echo "QA_URL=$QA_URL"
-          curl -fsS "$QA_URL/health" || curl -fsS "$QA_URL/"
-
-  deploy_prod:
-    name: Deploy to PROD (Cloud Run)
-    runs-on: ubuntu-22.04
-    needs: deploy_qa
-    if: github.ref == 'refs/heads/main'
-    environment: PROD  # 👈 esto te habilita aprobación manual si configuraste reviewers en GitHub Environments
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Fail if REGION is empty
-        run: |
-          if [ -z "${REGION}" ]; then
-            echo "ERROR: REGION is empty. Create GitHub Variable 'GCP_REGION' (repo or environment)."
-            exit 1
-          fi
-
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      - name: Setup gcloud
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Configure Docker auth for Artifact Registry
-        run: |
-          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
-
-      # Rebuild para PROD (simple y robusto). Si querés optimizar después, podemos reutilizar la imagen QA.
-      - name: Build & Push image to Artifact Registry (same tag)
-        run: |
-          IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${GAR_REPO}/${IMAGE_NAME}:${GITHUB_SHA}"
-          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
-          docker build -t "$IMAGE_URI" -f backend/DevTaskHub.Api/Dockerfile .
-          docker push "$IMAGE_URI"
-
-      - name: Deploy to Cloud Run (PROD)
-        run: |
-          gcloud run deploy "${SERVICE_PROD}" \
-            --image "${IMAGE_URI}" \
-            --region "${REGION}" \
-            --platform managed \
-            --allow-unauthenticated \
-            --port 8080 \
-            --set-env-vars "ASPNETCORE_ENVIRONMENT=PROD"
-
-      - name: Health check (PROD)
-        run: |
-          PROD_URL=$(gcloud run services describe "${SERVICE_PROD}" --region "${REGION}" --format='value(status.url)')
-          echo "PROD_URL=$PROD_URL"
-          curl -fsS "$PROD_URL/health" || curl -fsS "$PROD_URL/"
+ENTRYPOINT ["dotnet", "DevTaskHub.Api.dll"]
