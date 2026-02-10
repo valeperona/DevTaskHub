@@ -11,7 +11,7 @@ permissions:
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  REGION: ${{ vars.GCP_REGION }}
+  REGION: ${{ vars.GCP_REGION || secrets.GCP_REGION }}
   GAR_REPO: devtaskhub
   IMAGE_NAME: devtaskhub-api
   SERVICE_QA: devtaskhub-api-qa
@@ -87,6 +87,12 @@ jobs:
           echo "GAR_REPO=$GAR_REPO"
           echo "IMAGE_NAME=$IMAGE_NAME"
           echo "SERVICE_QA=$SERVICE_QA"
+      - name: Validate env vars
+        run: |
+          : "${PROJECT_ID:?PROJECT_ID is required}"
+          : "${REGION:?REGION is required}"
+          : "${GAR_REPO:?GAR_REPO is required}"
+          : "${IMAGE_NAME:?IMAGE_NAME is required}"
 
       - name: Configure Docker auth for Artifact Registry
         run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
@@ -134,6 +140,13 @@ jobs:
 
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
+
+      - name: Validate env vars
+        run: |
+          : "${PROJECT_ID:?PROJECT_ID is required}"
+          : "${REGION:?REGION is required}"
+          : "${GAR_REPO:?GAR_REPO is required}"
+          : "${IMAGE_NAME:?IMAGE_NAME is required}"
 
       - name: Configure Docker auth for Artifact Registry
         run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
