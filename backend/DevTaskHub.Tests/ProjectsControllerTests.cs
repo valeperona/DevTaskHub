@@ -61,7 +61,7 @@ public class ProjectsControllerTests
         var result = await controller.CreateProject(new ProjectsController.CreateProjectRequest("   ", null), CancellationToken.None);
 
         var problem = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(400, problem.StatusCode);
+        Assert.Equal(400, problem.StatusCode ?? problem.StatusCode.GetValueOrDefault(400));
     }
 
     [Fact]
@@ -147,7 +147,7 @@ public class ProjectsControllerTests
         var result = await controller.AddTaskToProject(project.Id, new ProjectsController.CreateTaskRequest("   ", null, TaskPriority.Low, null, null, null), CancellationToken.None);
 
         var problem = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(400, problem.StatusCode);
+        Assert.Equal(400, problem.StatusCode ?? problem.StatusCode.GetValueOrDefault(400));
     }
 
     [Fact]

@@ -1,0 +1,145 @@
+name: CI-CD (Cloud Run)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: ${{ vars.GCP_REGION }}
+  GAR_REPO: devtaskhub
+  IMAGE_NAME: devtaskhub-api
+  SERVICE_QA: devtaskhub-api-qa
+  SERVICE_PROD: devtaskhub-api-prod
+
+jobs:
+  build_test:
+    name: Build & Test (Backend + Frontend)
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ---------- BACKEND ----------
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore backend
+        run: dotnet restore backend/DevTaskHub.sln
+
+      - name: Build backend
+        run: dotnet build backend/DevTaskHub.sln -c Release --no-restore
+
+      - name: Test backend
+        run: dotnet test backend/DevTaskHub.Tests/DevTaskHub.Tests.csproj -c Release --no-build
+
+      # ---------- FRONTEND ----------
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/devtaskhub-frontend/package-lock.json
+
+      - name: Install frontend deps
+        run: npm ci --legacy-peer-deps
+        working-directory: frontend/devtaskhub-frontend
+
+      # Ajustá este comando si tu proyecto usa Vitest/Jest
+      - name: Run frontend unit tests
+        run: npm test -- --run
+        working-directory: frontend/devtaskhub-frontend
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: frontend/devtaskhub-frontend
+
+  deploy_qa:
+    name: Deploy to QA (Cloud Run)
+    runs-on: ubuntu-22.04
+    needs: build_test
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker auth for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build & Push image to Artifact Registry
+        run: |
+          IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${GAR_REPO}/${IMAGE_NAME}:${GITHUB_SHA}"
+          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
+          docker build -t "$IMAGE_URI" -f backend/DevTaskHub.Api/Dockerfile .
+          docker push "$IMAGE_URI"
+
+      - name: Deploy to Cloud Run (QA)
+        run: |
+          gcloud run deploy "${SERVICE_QA}" \
+            --image "${IMAGE_URI}" \
+            --region "${REGION}" \
+            --platform managed \
+            --allow-unauthenticated \
+            --set-env-vars "ASPNETCORE_ENVIRONMENT=QA"
+
+      - name: Health check (QA)
+        run: |
+          QA_URL=$(gcloud run services describe "${SERVICE_QA}" --region "${REGION}" --format='value(status.url)')
+          echo "QA_URL=$QA_URL"
+          curl -fsS "$QA_URL/health" || curl -fsS "$QA_URL/"
+
+  deploy_prod:
+    name: Deploy to PROD (Cloud Run)
+    runs-on: ubuntu-22.04
+    needs: deploy_qa
+    if: github.ref == 'refs/heads/main'
+    environment: PROD
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker auth for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Deploy to Cloud Run (PROD)
+        run: |
+          IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${GAR_REPO}/${IMAGE_NAME}:${GITHUB_SHA}"
+
+          gcloud run deploy "${SERVICE_PROD}" \
+            --image "${IMAGE_URI}" \
+            --region "${REGION}" \
+            --platform managed \
+            --allow-unauthenticated \
+            --set-env-vars "ASPNETCORE_ENVIRONMENT=PROD"
+
+      - name: Health check (PROD)
+        run: |
+          PROD_URL=$(gcloud run services describe "${SERVICE_PROD}" --region "${REGION}" --format='value(status.url)')
+          echo "PROD_URL=$PROD_URL"
+          curl -fsS "$PROD_URL/health" || curl -fsS "$PROD_URL/"

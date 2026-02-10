@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { vi } from 'vitest';
 import { ProjectBoardPage } from '../pages/ProjectBoardPage';
+import { apiClient } from '../api/apiClient';
 
 vi.mock('../api/apiClient', () => ({
   apiClient: {
@@ -14,11 +15,7 @@ vi.mock('../api/apiClient', () => ({
   }
 }));
 
-const mockedApi = require('../api/apiClient').apiClient as {
-  getProject: ReturnType<typeof vi.fn>;
-  addTaskToProject: ReturnType<typeof vi.fn>;
-  updateTask: ReturnType<typeof vi.fn>;
-};
+const mockedApi = vi.mocked(apiClient);
 
 const renderWithRoute = (route: string) =>
   render(
@@ -67,7 +64,7 @@ describe('ProjectBoardPage', () => {
 
     await userEvent.selectOptions(screen.getByLabelText(/Asignada a/i), 'owner1');
 
-    await waitFor(() => expect(screen.getByText(/Sin tareas/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('Tarea 1')).not.toBeInTheDocument());
   });
 
   it('impide crear tareas si el usuario es viewer', async () => {

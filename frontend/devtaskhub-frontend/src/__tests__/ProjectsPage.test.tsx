@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { vi } from 'vitest';
 import { ProjectsPage } from '../pages/ProjectsPage';
+import { apiClient } from '../api/apiClient';
 
 vi.mock('../api/apiClient', () => ({
   apiClient: {
@@ -13,12 +14,7 @@ vi.mock('../api/apiClient', () => ({
   }
 }));
 
-const mockedApi = require('../api/apiClient').apiClient as {
-  getProjects: ReturnType<typeof vi.fn>;
-  createProject: ReturnType<typeof vi.fn>;
-  deleteProject: ReturnType<typeof vi.fn>;
-  leaveProject: ReturnType<typeof vi.fn>;
-};
+const mockedApi = vi.mocked(apiClient);
 
 const session = { userId: 'owner-1', email: 'owner@test.com', token: 'x' };
 
@@ -65,7 +61,7 @@ describe('ProjectsPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /Nuevo proyecto/i }));
     await userEvent.type(screen.getByPlaceholderText(/Nombre del proyecto/i), 'Nuevo');
-    fireEvent.submit(screen.getByRole('form'));
+    fireEvent.submit(screen.getByText(/Crear proyecto/i).closest('form')!);
 
     expect(await screen.findByText('Nuevo')).toBeInTheDocument();
   });

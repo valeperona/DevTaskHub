@@ -7,12 +7,12 @@ namespace DevTaskHub.Api.Data;
 
 public class DevTaskHubContext(DbContextOptions<DevTaskHubContext> options) : DbContext(options)
 {
-    public DbSet<Project> Projects => Set<Project>();
-    public DbSet<TaskItem> TaskItems => Set<TaskItem>();
-    public DbSet<User> Users => Set<User>();
-    public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
-    public DbSet<TaskChecklistItem> TaskChecklistItems => Set<TaskChecklistItem>();
-    public DbSet<ProjectInvitation> ProjectInvitations => Set<ProjectInvitation>();
+    public virtual DbSet<Project> Projects { get; set; } = null!;
+    public virtual DbSet<TaskItem> TaskItems { get; set; } = null!;
+    public virtual DbSet<User> Users { get; set; } = null!;
+    public virtual DbSet<ProjectMember> ProjectMembers { get; set; } = null!;
+    public virtual DbSet<TaskChecklistItem> TaskChecklistItems { get; set; } = null!;
+    public virtual DbSet<ProjectInvitation> ProjectInvitations { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

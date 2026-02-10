@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import { LoginPage } from '../pages/LoginPage';
+import { apiClient } from '../api/apiClient';
 
 vi.mock('../api/apiClient', () => ({
   apiClient: {
@@ -10,10 +11,7 @@ vi.mock('../api/apiClient', () => ({
   }
 }));
 
-const mockedApi = require('../api/apiClient').apiClient as {
-  login: ReturnType<typeof vi.fn>;
-  register: ReturnType<typeof vi.fn>;
-};
+const mockedApi = vi.mocked(apiClient);
 
 describe('LoginPage', () => {
   it('muestra error si los campos están vacíos al enviar', async () => {

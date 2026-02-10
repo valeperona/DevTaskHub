@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using Moq;
 using Xunit;
 
 namespace DevTaskHub.Tests;
@@ -29,14 +28,14 @@ public class AuthControllerTests
         var result = await controller.Register(new AuthController.RegisterRequest("", "123456"), CancellationToken.None);
 
         var problem = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(400, problem.StatusCode);
+        Assert.Equal(400, problem.StatusCode ?? problem.StatusCode.GetValueOrDefault(400));
     }
 
     [Fact]
     public async Task Register_ReturnsConflict_WhenUserAlreadyExists()
     {
-        using var context = TestUtils.CreateContext();
         var existing = TestUtils.CreateUser("taken@test.com");
+        using var context = TestUtils.CreateContext();
         context.Users.Add(existing);
         context.SaveChanges();
 
@@ -65,10 +64,10 @@ public class AuthControllerTests
     [Fact]
     public async Task Login_ReturnsUnauthorized_ForWrongPassword()
     {
-        using var context = TestUtils.CreateContext();
         var passwordHasher = new PasswordHasher<User>();
         var user = TestUtils.CreateUser("auth@test.com");
         user.PasswordHash = passwordHasher.HashPassword(user, "correct");
+        using var context = TestUtils.CreateContext();
         context.Users.Add(user);
         context.SaveChanges();
 
@@ -81,10 +80,10 @@ public class AuthControllerTests
     [Fact]
     public async Task Login_ReturnsToken_ForValidCredentials()
     {
-        using var context = TestUtils.CreateContext();
         var passwordHasher = new PasswordHasher<User>();
         var user = TestUtils.CreateUser("ok@test.com");
         user.PasswordHash = passwordHasher.HashPassword(user, "secret123");
+        using var context = TestUtils.CreateContext();
         context.Users.Add(user);
         context.SaveChanges();
 

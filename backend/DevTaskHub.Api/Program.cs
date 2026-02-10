@@ -61,6 +61,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
+builder.Services.AddScoped<DevTaskHub.Api.Services.ITaskService, DevTaskHub.Api.Services.TaskService>();
 
 // --- 2. Configuración de Base de Datos (FIX para EF Core Design Time) ---
 

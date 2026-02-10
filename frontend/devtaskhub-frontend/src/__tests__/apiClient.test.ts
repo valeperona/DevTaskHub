@@ -1,7 +1,13 @@
+import { vi } from 'vitest';
 import { apiClient, setAuthToken } from '../api/apiClient';
 
 describe('apiClient', () => {
   const originalFetch = global.fetch;
+
+  beforeAll(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-01-01T00:00:00Z'));
+  });
 
   beforeEach(() => {
     setAuthToken(null);
@@ -10,6 +16,10 @@ describe('apiClient', () => {
 
   afterEach(() => {
     global.fetch = originalFetch;
+  });
+
+  afterAll(() => {
+    vi.useRealTimers();
   });
 
   it('realiza login y retorna payload', async () => {
