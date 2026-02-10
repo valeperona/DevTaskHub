@@ -80,14 +80,25 @@ jobs:
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Debug env
+        run: |
+          echo "PROJECT_ID=$PROJECT_ID"
+          echo "REGION=$REGION"
+          echo "GAR_REPO=$GAR_REPO"
+          echo "IMAGE_NAME=$IMAGE_NAME"
+          echo "SERVICE_QA=$SERVICE_QA"
+
       - name: Configure Docker auth for Artifact Registry
-        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
 
       - name: Build & Push image to Artifact Registry
         run: |
           IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${GAR_REPO}/${IMAGE_NAME}:${GITHUB_SHA}"
           echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
-          docker build -t "$IMAGE_URI" -f backend/DevTaskHub.Api/Dockerfile .
+          echo "Building $IMAGE_URI"
+
+          # OJO: el "context" lo dejo en ./backend (lo más típico para .NET en subcarpeta)
+          docker build -t "$IMAGE_URI" -f backend/DevTaskHub.Api/Dockerfile ./backend
           docker push "$IMAGE_URI"
 
       - name: Deploy to Cloud Run (QA)
@@ -125,11 +136,12 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Configure Docker auth for Artifact Registry
-        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
 
       - name: Deploy to Cloud Run (PROD)
         run: |
           IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${GAR_REPO}/${IMAGE_NAME}:${GITHUB_SHA}"
+          echo "Deploying $IMAGE_URI"
 
           gcloud run deploy "${SERVICE_PROD}" \
             --image "${IMAGE_URI}" \
